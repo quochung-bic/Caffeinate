@@ -1,0 +1,38 @@
+# .gitignore theo lối whitelist: chặn hết ở gốc, rồi mở lại đúng những gì thuộc
+# về dự án.
+#
+# Vì sao ngược đời như vậy: thư mục gốc của một dự án Xcode là nơi công cụ tự
+# thả đồ vào — DerivedData, .build của SwiftPM, thư mục làm việc của đủ loại
+# trợ lý, ảnh chụp màn hình, bản dựng thử. Danh sách chặn kiểu liệt kê luôn đi
+# sau thực tế: thứ nào chưa ai gặp thì chưa có dòng nào chặn, và nó lọt vào
+# commit. Danh sách cho phép thì hỏng theo chiều an toàn hơn — thêm một thư mục
+# thật vào dự án mà quên khai báo ở đây thì `git status` im lặng, nhưng không có
+# rác nào tự chui vào lịch sử.
+#
+# Thêm thư mục mới ở gốc thì phải thêm một dòng `!/tên/` bên dưới.
+
+/*
+
+!/.gitignore
+!/CHANGELOG.md
+!/CLAUDE.md
+!/LICENSE
+!/README.md
+
+!/Caffeinate/
+!/Caffeinate.xcodeproj/
+!/CaffeinateKit/
+!/CaffeinateUITests/
+!/Configs/
+!/Scripts/
+!/docs/
+
+# Bên trong các thư mục đã mở lại, chặn tiếp phần do công cụ sinh ra. Whitelist
+# ở trên chỉ có tác dụng ở cấp gốc, nên những thứ này vẫn phải nêu tên.
+
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
