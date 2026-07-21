@@ -48,3 +48,33 @@ final class FakeBacking: PowerAssertionBacking, @unchecked Sendable {
         lock.withLock { _calls.append(.release(id)) }
     }
 }
+
+@MainActor
+final class FakeTrigger: Trigger {
+    var onChange: (@MainActor (TriggerReason, Bool) -> Void)?
+    private(set) var started = false
+    private(set) var stopped = false
+
+    /// Trạng thái active gần nhất đã báo cho mỗi lý do — mô phỏng baseline
+    /// nội bộ của trigger thật (`PowerSourceTrigger.isCharging`,
+    /// `ExternalDisplayTrigger.hasExternal`, dictionary `reported` của
+    /// `AppRunningTrigger`).
+    private var lastReported: [TriggerReason: Bool] = [:]
+
+    func start() { started = true }
+    func stop() { stopped = true }
+
+    /// Giả lập trigger đổi trạng thái. Chỉ gọi `onChange` khi trạng thái
+    /// THỰC SỰ đổi so với lần báo trước cho cùng lý do — giống hệt guard
+    /// "chỉ báo khi thực sự đổi" mà mọi trigger thật đều có (xem
+    /// `PowerSourceTrigger.refresh()`, `ExternalDisplayTrigger.refresh()`,
+    /// diff dictionary trong `AppRunningTrigger.refresh()`). Gọi lại
+    /// `fire(reason, active: true)` hai lần liên tiếp không tạo ra sự kiện
+    /// thứ hai — phải có một `active: false` chen giữa để mô phỏng chuyển
+    /// tiếp thật.
+    func fire(_ reason: TriggerReason, active: Bool) {
+        guard lastReported[reason] != active else { return }
+        lastReported[reason] = active
+        onChange?(reason, active)
+    }
+}
