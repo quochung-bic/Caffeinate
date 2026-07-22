@@ -78,3 +78,13 @@ final class FakeTrigger: Trigger {
         onChange?(reason, active)
     }
 }
+
+/// SettingsStoring trong bộ nhớ — không chạm UserDefaults, để test cô lập
+/// và không rò rỉ trạng thái giữa các lần chạy.
+final class InMemorySettingsStore: SettingsStoring {
+    var settings: Settings
+
+    init(settings: Settings = Settings()) {
+        self.settings = settings
+    }
+}
