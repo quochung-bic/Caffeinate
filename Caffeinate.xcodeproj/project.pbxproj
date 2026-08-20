@@ -1,0 +1,227 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		C0FF00000000000000000101 /* CaffeinateKit in Frameworks */ = {isa = PBXBuildFile; productRef = C0FF00000000000000000100 /* CaffeinateKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		C0FF00000000000000000001 /* Caffeinate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Caffeinate.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0FF00000000000000000300 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		C0FF00000000000000000301 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		C0FF00000000000000000302 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		C0FF00000000000000000303 /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
+		C0FF00000000000000000305 /* Caffeinate.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Caffeinate.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		C0FF00000000000000000010 /* Caffeinate */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Caffeinate; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C0FF00000000000000000020 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0FF00000000000000000101 /* CaffeinateKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		C0FF00000000000000000030 = {
+			isa = PBXGroup;
+			children = (
+				C0FF00000000000000000010 /* Caffeinate */,
+				C0FF00000000000000000310 /* Configs */,
+				C0FF00000000000000000031 /* Packages */,
+				C0FF00000000000000000032 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C0FF00000000000000000031 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		C0FF00000000000000000032 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C0FF00000000000000000001 /* Caffeinate.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C0FF00000000000000000310 /* Configs */ = {
+			isa = PBXGroup;
+			children = (
+				C0FF00000000000000000300 /* Base.xcconfig */,
+				C0FF00000000000000000301 /* Debug.xcconfig */,
+				C0FF00000000000000000302 /* Release.xcconfig */,
+				C0FF00000000000000000303 /* App.xcconfig */,
+				C0FF00000000000000000305 /* Caffeinate.entitlements */,
+			);
+			path = Configs;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C0FF00000000000000000040 /* Caffeinate */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0FF00000000000000000050 /* Build configuration list for PBXNativeTarget "Caffeinate" */;
+			buildPhases = (
+				C0FF00000000000000000041 /* Sources */,
+				C0FF00000000000000000020 /* Frameworks */,
+				C0FF00000000000000000042 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C0FF00000000000000000010 /* Caffeinate */,
+			);
+			name = Caffeinate;
+			packageProductDependencies = (
+				C0FF00000000000000000100 /* CaffeinateKit */,
+			);
+			productName = Caffeinate;
+			productReference = C0FF00000000000000000001 /* Caffeinate.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C0FF00000000000000000060 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					C0FF00000000000000000040 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+				};
+			};
+			buildConfigurationList = C0FF00000000000000000061 /* Build configuration list for PBXProject "Caffeinate" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = vi;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				vi,
+				en,
+				Base,
+			);
+			mainGroup = C0FF00000000000000000030;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C0FF00000000000000000090 /* XCLocalSwiftPackageReference "CaffeinateKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = C0FF00000000000000000032 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C0FF00000000000000000040 /* Caffeinate */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C0FF00000000000000000042 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C0FF00000000000000000041 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		C0FF00000000000000000070 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0FF00000000000000000301 /* Debug.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		C0FF00000000000000000071 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0FF00000000000000000302 /* Release.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		C0FF00000000000000000080 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0FF00000000000000000303 /* App.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		C0FF00000000000000000081 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0FF00000000000000000303 /* App.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C0FF00000000000000000050 /* Build configuration list for PBXNativeTarget "Caffeinate" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0FF00000000000000000080 /* Debug */,
+				C0FF00000000000000000081 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C0FF00000000000000000061 /* Build configuration list for PBXProject "Caffeinate" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0FF00000000000000000070 /* Debug */,
+				C0FF00000000000000000071 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		C0FF00000000000000000090 /* XCLocalSwiftPackageReference "CaffeinateKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = CaffeinateKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C0FF00000000000000000100 /* CaffeinateKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CaffeinateKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = C0FF00000000000000000060 /* Project object */;
+}

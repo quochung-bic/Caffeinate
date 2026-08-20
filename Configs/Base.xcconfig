@@ -1,0 +1,69 @@
+// Base.xcconfig — cài đặt dùng chung cho MỌI target và MỌI configuration.
+//
+// Vì sao dùng xcconfig thay vì gõ thẳng vào project.pbxproj: pbxproj là file
+// sinh ra, khó đọc, khó review diff và dễ bị Xcode viết đè. Cài đặt build là
+// mã nguồn — nó phải nằm ở chỗ đọc được, có comment và review được.
+
+// MARK: - Nền tảng
+
+// macOS 14 (Sonoma) là mốc thấp nhất còn hợp lý: đủ mới để dùng @Observable,
+// SMAppService và MenuBarExtra(.window), đủ cũ để mọi máy Intel còn được Apple
+// hỗ trợ đều chạy được.
+MACOSX_DEPLOYMENT_TARGET = 14.0
+SDKROOT = macosx
+
+// Universal binary tường minh. Không dựa vào giá trị mặc định của Xcode:
+// mặc định đổi theo phiên bản Xcode, mà "chạy được trên cả Intel lẫn Apple
+// Silicon" là yêu cầu sản phẩm chứ không phải hệ quả tình cờ.
+ARCHS = $(ARCHS_STANDARD)
+
+// MARK: - Swift
+
+SWIFT_VERSION = 6.0
+// Swift 6 language mode đã bật kiểm tra đồng thời ở mức đầy đủ; khai báo
+// tường minh để nếu có ai hạ SWIFT_VERSION xuống thì cũng không mất kiểm tra.
+SWIFT_STRICT_CONCURRENCY = complete
+SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY = YES
+
+// MARK: - Cảnh báo
+//
+// Bật rộng nhưng KHÔNG bật -Werror: cảnh báo mới xuất hiện theo mỗi bản Xcode,
+// biến chúng thành lỗi nghĩa là một bản Xcode mới có thể làm hỏng build của
+// người khác mà không liên quan gì tới mã của họ.
+
+CLANG_ENABLE_OBJC_WEAK = YES
+CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES
+CLANG_WARN_BOOL_CONVERSION = YES
+CLANG_WARN_COMMA = YES
+CLANG_WARN_CONSTANT_CONVERSION = YES
+CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES
+CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR
+CLANG_WARN_DOCUMENTATION_COMMENTS = YES
+CLANG_WARN_EMPTY_BODY = YES
+CLANG_WARN_ENUM_CONVERSION = YES
+CLANG_WARN_INFINITE_RECURSION = YES
+CLANG_WARN_INT_CONVERSION = YES
+CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES
+CLANG_WARN_OBJC_LITERAL_CONVERSION = YES
+CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR
+CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES
+CLANG_WARN_RANGE_LOOP_ANALYSIS = YES
+CLANG_WARN_STRICT_PROTOTYPES = YES
+CLANG_WARN_SUSPICIOUS_MOVE = YES
+CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE
+CLANG_WARN_UNREACHABLE_CODE = YES
+CLANG_WARN__DUPLICATE_METHOD_MATCH = YES
+GCC_NO_COMMON_BLOCKS = YES
+GCC_WARN_64_TO_32_BIT_CONVERSION = YES
+GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR
+GCC_WARN_UNDECLARED_SELECTOR = YES
+GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE
+GCC_WARN_UNUSED_FUNCTION = YES
+GCC_WARN_UNUSED_VARIABLE = YES
+
+// MARK: - Vệ sinh chung
+
+ALWAYS_SEARCH_USER_PATHS = NO
+ENABLE_STRICT_OBJC_MSGSEND = YES
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+DEAD_CODE_STRIPPING = YES

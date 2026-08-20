@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Cố ý RỖNG, và cố ý tồn tại.
+
+	  App Sandbox KHÔNG bật: Caffeinate cần liệt kê tiến trình đang chạy qua
+	  NSWorkspace.runningApplications để luật "app X đang chạy" hoạt động, và
+	  cần đọc icon/tên của app bất kỳ người dùng chọn. Trong sandbox, cả hai
+	  đều bị cắt hoặc phải xin thêm quyền tạm — đổi lấy một tính năng cốt lõi
+	  không phải giao dịch hợp lý cho một tiện ích phân phối ngoài App Store.
+
+	  Vì vậy app đi theo con đường Developer ID: hardened runtime + notarize,
+	  không sandbox. File này giữ lại để lựa chọn đó là một quyết định ghi
+	  thành văn bản, không phải một thiếu sót — và để khi cần thêm quyền thì
+	  đã có sẵn chỗ đặt.
+	-->
+</dict>
+</plist>

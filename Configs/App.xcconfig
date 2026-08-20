@@ -1,0 +1,50 @@
+// App.xcconfig — chỉ những cài đặt riêng của target ứng dụng.
+// Phần chung (nền tảng, Swift, cảnh báo) nằm ở Base/Debug/Release.xcconfig,
+// gắn ở mức project.
+
+// MARK: - Danh tính
+//
+// Bundle ID phải là reverse-DNS của một tên miền mình thật sự kiểm soát.
+// io.github.<user> là quy ước hợp lệ và ổn định cho dự án phát hành qua GitHub.
+// Đổi giá trị này là đổi cả nơi lưu UserDefaults lẫn đăng ký login item, nên
+// nó phải được chốt TRƯỚC bản phát hành đầu tiên — sau đó thì không đổi nữa.
+PRODUCT_BUNDLE_IDENTIFIER = io.github.quochung-bic.Caffeinate
+PRODUCT_NAME = Caffeinate
+
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1
+
+// Nguồn sự thật cho ngôn ngữ gốc của mã nguồn. Chuỗi trong mã viết bằng tiếng
+// Việt; bản tiếng Anh nằm trong Localizable.xcstrings.
+DEVELOPMENT_LANGUAGE = vi
+
+// MARK: - Info.plist (sinh tự động, không có file plist rời để lệch)
+
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_KEY_CFBundleDisplayName = Caffeinate
+INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.utilities
+INFOPLIST_KEY_NSHumanReadableCopyright = Copyright © 2026 Quốc Hưng. Giấy phép MIT.
+
+// Ứng dụng thanh menu: không có icon Dock, không có mục trong App Switcher.
+// Đây là hợp đồng với người dùng — app phải sống trọn vẹn trên thanh menu,
+// không được phụ thuộc vào một cửa sổ nào để hoạt động.
+INFOPLIST_KEY_LSUIElement = YES
+
+// MARK: - Tài nguyên
+
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
+ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
+ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES
+COMBINE_HIDPI_IMAGES = YES
+SWIFT_EMIT_LOC_STRINGS = YES
+
+// MARK: - Ký
+
+// Hardened runtime bật sẵn để bản dựng cục bộ giống bản phát hành nhất có thể:
+// nếu có gì hỏng vì hardened runtime thì hỏng ngay trên máy nhà phát triển,
+// không phải sau khi notarize.
+ENABLE_HARDENED_RUNTIME = YES
+CODE_SIGN_ENTITLEMENTS = Configs/Caffeinate.entitlements
+// "-" = ký ad-hoc. Bản phát hành cần thay bằng "Developer ID Application".
+CODE_SIGN_IDENTITY = -
+CODE_SIGN_STYLE = Automatic

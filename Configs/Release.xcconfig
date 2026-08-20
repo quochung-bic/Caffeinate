@@ -1,0 +1,20 @@
+#include "Base.xcconfig"
+
+// Bắt buộc dựng đủ arm64 + x86_64. Nếu để YES thì bản Release tạo trên máy
+// Apple Silicon sẽ im lặng bỏ rơi người dùng Intel.
+ONLY_ACTIVE_ARCH = NO
+
+SWIFT_OPTIMIZATION_LEVEL = -O
+SWIFT_COMPILATION_MODE = wholemodule
+GCC_OPTIMIZATION_LEVEL = s
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+ENABLE_NS_ASSERTIONS = NO
+COPY_PHASE_STRIP = NO
+STRIP_INSTALLED_PRODUCT = YES
+STRIP_STYLE = non-global
+VALIDATE_PRODUCT = YES
+
+// Bản phát hành không được phép cho debugger gắn vào tiến trình. Xcode mặc
+// định tiêm entitlement get-task-allow vào mọi bản dựng cục bộ; tắt nó ở đây
+// để bản Release trên máy giống hệt bản sẽ đem đi notarize.
+CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO
