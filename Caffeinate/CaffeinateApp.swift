@@ -6,6 +6,8 @@ import CaffeinateKit
 ///
 /// Hệ quả kiến trúc, không phải chi tiết thẩm mỹ — icon trên thanh menu là bề
 /// mặt DUY NHẤT luôn tồn tại, nên mọi thứ phải sống suốt phiên đều móc vào đó.
+/// Cửa sổ Cài đặt chỉ là một khung nhìn phụ, đóng mở lúc nào cũng được mà không
+/// ảnh hưởng gì tới việc app có đang giữ máy thức hay không.
 ///
 /// Bản trước có thêm một cửa sổ chính, và gần như toàn bộ độ phức tạp của vòng
 /// đời app nằm ở chỗ điều phối nó với panel: một `NSApplicationDelegate` để
@@ -21,6 +23,7 @@ struct CaffeinateApp: App {
 
     var body: some Scene {
         menuBar
+        settings
     }
 
     private var menuBar: some Scene {
@@ -38,6 +41,17 @@ struct CaffeinateApp: App {
                 }
         }
         .menuBarExtraStyle(.window)
+    }
+
+    /// `SwiftUI.` là bắt buộc chứ không phải để cho đẹp: `CaffeinateKit` cũng
+    /// export một kiểu tên `Settings` (bộ cấu hình người dùng), nên viết trần
+    /// `Settings { … }` ở đây sẽ bắt vào nhầm kiểu và trình biên dịch báo lỗi ở
+    /// một chỗ hoàn toàn khác.
+    private var settings: some Scene {
+        SwiftUI.Settings {
+            SettingsView(controller: controller, language: language)
+                .environment(\.locale, language.locale)
+        }
     }
 
 }
