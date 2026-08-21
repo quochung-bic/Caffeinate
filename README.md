@@ -122,6 +122,25 @@ Chưa có bản dựng phát hành sẵn — hiện tại bạn tự build từ 
 ```bash
 git clone https://github.com/quochung-bic/Caffeinate.git
 cd Caffeinate
+./Scripts/install.sh
+```
+
+`install.sh` dựng bản Release, bảo bản đang chạy thoát, thay
+`/Applications/Caffeinate.app` rồi mở app lên. Chạy lại đúng lệnh đó mỗi khi
+muốn cập nhật. `--test` để chạy toàn bộ test trước, `--destination` để cài chỗ
+khác (xem cảnh báo ở cuối mục này), `--help` để xem hết tuỳ chọn.
+
+Vì bạn tự biên dịch nên bundle không mang cờ quarantine: Gatekeeper không chặn
+và cũng không hỏi gì — thứ khác hẳn với một file `.app` tải từ trên mạng về.
+Chữ ký là ad-hoc, đủ để chạy trên máy của chính bạn; muốn phát cho người khác
+tải về thì cần Developer ID và notarize.
+
+Gỡ cài đặt: thoát app từ thanh menu rồi kéo `Caffeinate.app` vào Thùng rác. Thứ
+duy nhất nó để lại là `~/Library/Preferences/io.github.quochung-bic.Caffeinate.plist`.
+
+### Chỉ dựng, không cài
+
+```bash
 ./Scripts/build.sh
 ```
 
@@ -143,9 +162,11 @@ lipo -info /đường/dẫn/tới/Caffeinate.app/Contents/MacOS/Caffeinate
 # Architectures in the fat file: ... are: x86_64 arm64
 ```
 
-Sau đó chép `Caffeinate.app` vào `/Applications`. Bước chép này không chỉ cho
-gọn: **tính năng khởi động cùng macOS chỉ hoạt động khi app nằm trong
-`/Applications`** — đó là yêu cầu của `SMAppService`.
+Dựng bằng tay thì nhớ chép `Caffeinate.app` vào `/Applications` — đó là việc
+`install.sh` làm hộ. Bước chép này không chỉ cho gọn: **tính năng khởi động cùng
+macOS chỉ hoạt động khi app nằm trong `/Applications`**, vì `SMAppService` từ
+chối đăng ký bundle nằm chỗ khác. Chạy từ `build/` hay từ `~/Applications` thì
+mọi thứ khác vẫn đúng, riêng công tắc ấy sẽ báo lỗi và nói rõ lý do.
 
 Hoặc mở `Caffeinate.xcodeproj` bằng Xcode rồi bấm Run như bình thường.
 

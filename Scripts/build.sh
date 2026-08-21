@@ -164,11 +164,16 @@ if [[ "${configuration}" == "Debug" ]]; then
     warn "Bản Debug chỉ có một kiến trúc và không tối ưu. Dùng --release để phát hành."
 fi
 
-cat <<EOF
+# Khi install.sh gọi vào đây thì nó lo tiếp phần cài đặt, và in thêm một cách
+# cài thứ hai ngay trước khi nó tự làm việc đó chỉ khiến người đọc phân vân.
+if [[ -z "${CAFFEINATE_INSTALLING:-}" ]]; then
+    cat <<EOF
 
 Cài đặt:
-    cp -R "${final_app}" /Applications/
+    ./Scripts/install.sh          # dựng lại rồi đặt vào /Applications
+    cp -R "${final_app}" /Applications/    # hoặc chép tay
 
 Khởi động cùng macOS chỉ hoạt động khi app nằm trong /Applications — đó là yêu
 cầu của SMAppService, không phải một tuỳ chọn.
 EOF
+fi

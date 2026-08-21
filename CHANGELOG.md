@@ -18,6 +18,11 @@
 - `Scripts/build.sh` — build từ dòng lệnh, đặt sản phẩm ở một chỗ cố định
   (`build/Caffeinate.app`) và **chặn bản Release không universal**, thay vì để
   chuyện đó thành một mục trong danh sách phải nhớ.
+- `Scripts/install.sh` — dựng rồi đặt vào `/Applications` bằng một lệnh, cho
+  người vừa clone repo về. Nó lo ba việc mà một dòng `cp -R` bỏ sót: bảo bản
+  đang chạy thoát để nó kịp ghi cài đặt và nhả assertion, thay hẳn bundle cũ
+  thay vì trộn vào nó, và mở app lên — với một app thanh menu thuần thì chép
+  xong chẳng có gì hiện ra để biết là đã cài được.
 - `.gitignore` chuyển sang lối whitelist: chặn hết ở gốc rồi mở lại đúng những
   thư mục thuộc về dự án, để rác của công cụ không lọt vào commit chỉ vì chưa
   ai gặp nó bao giờ.

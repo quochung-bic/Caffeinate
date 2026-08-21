@@ -18,6 +18,9 @@ sao*, không nhắc lại *cái gì*.
 # build từ dòng lệnh — Release, kiểm luôn universal binary, ra ./build/Caffeinate.app
 ./Scripts/build.sh            # --debug nhanh hơn, --test chạy test trước, --help xem hết
 
+# build rồi cài luôn vào /Applications (thoát bản đang chạy, thay bundle, mở lại)
+./Scripts/install.sh          # --test, --destination DIR, --no-build, --help
+
 # unit test phần lõi — 69 test, chưa tới 0,2 s, không cần GUI. Chạy cái này trước.
 swift test --package-path CaffeinateKit
 
