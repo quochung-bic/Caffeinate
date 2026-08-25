@@ -1,178 +1,166 @@
 # CLAUDE.md
 
-Hướng dẫn cho Claude Code khi làm việc trong repo này.
+Notes for Claude Code working in this repository.
 
-## Ngôn ngữ
+## Language
 
-Mã nguồn, chú thích và tài liệu **viết bằng tiếng Việt**. Giữ nguyên quy ước
-này. Ngoại lệ duy nhất là những chuỗi mà hệ điều hành đọc (xem *Bất biến* bên
-dưới).
+Source, comments and documentation are **written in English**. Keep it that way.
 
-**Thông điệp commit viết bằng tiếng Anh** — câu mệnh lệnh tự nhiên, dòng đầu
-không quá 60 ký tự, không dùng prefix `feat:`/`fix:`. Phần thân giải thích *vì
-sao*, không nhắc lại *cái gì*.
+**Commit messages are English too** — natural imperative mood, first line under
+60 characters, no `feat:`/`fix:` prefixes. The body explains *why*, not *what*.
 
-## Lệnh hay dùng
+## Common commands
 
 ```bash
-# build từ dòng lệnh — Release, kiểm luôn universal binary, ra ./build/Caffeinate.app
-./Scripts/build.sh            # --debug nhanh hơn, --test chạy test trước, --help xem hết
+# command-line build — Release, verifies the universal binary, outputs ./build/Caffeinate.app
+./Scripts/build.sh            # --debug is faster, --test runs tests first, --help for all options
 
-# build rồi cài luôn vào /Applications (thoát bản đang chạy, thay bundle, mở lại)
+# build and install into /Applications (quits the running copy, replaces the bundle, reopens)
 ./Scripts/install.sh          # --test, --destination DIR, --no-build, --help
 
-# unit test phần lõi — 69 test, chưa tới 0,2 s, không cần GUI. Chạy cái này trước.
+# core unit tests — 69 tests, under 0.2 s, no GUI needed. Run this first.
 swift test --package-path CaffeinateKit
 
-# chạy một suite hoặc một test lẻ (khớp theo tên hiển thị tiếng Việt)
+# run one suite or a single test (matched against the English display names)
 swift test --package-path CaffeinateKit --filter 'CaffeineController'
-swift test --package-path CaffeinateKit --filter 'hẹn giờ'
+swift test --package-path CaffeinateKit --filter 'timers'
 
-# build ứng dụng
+# build the app
 xcodebuild -project Caffeinate.xcodeproj -scheme Caffeinate \
            -destination 'platform=macOS' build
 
-# build + toàn bộ test giao diện (chậm, ~1 phút, chiếm màn hình)
+# build plus every UI test (slow, ~45 s, takes over the screen)
 xcodebuild -project Caffeinate.xcodeproj -scheme Caffeinate \
            -destination 'platform=macOS' test
 
-# chạy một lớp / một test giao diện lẻ
+# run one UI test class or a single UI test
 xcodebuild -project Caffeinate.xcodeproj -scheme Caffeinate \
            -destination 'platform=macOS' \
            -only-testing:CaffeinateUITests/SettingsAccessibilityTests test
 
-# vẽ lại toàn bộ bộ icon ứng dụng
+# redraw the whole app icon set
 swift Scripts/GenerateAppIcon.swift
 
-# kiểm chứng bản Release là universal binary
-lipo -info <đường-dẫn>/Caffeinate.app/Contents/MacOS/Caffeinate
+# verify a Release build really is a universal binary
+lipo -info <path>/Caffeinate.app/Contents/MacOS/Caffeinate
 ```
 
-Đích cuối phải luôn xanh: **69 unit test + 9 test giao diện, không cảnh báo nào**.
+The finish line is always green: **69 unit tests + 3 UI tests, and no warnings**.
 
-Chín test giao diện chia làm ba nhóm, và nhóm nào đỏ cũng nói lên chuyện khác nhau:
+The three UI tests fall into two groups, and each says something different when
+it goes red:
 
-| Lớp | Số test | Bắt được gì |
+| Class | Tests | What it catches |
 |---|---|---|
-| `SmokeTests` | 2 | nút → controller → state, và giao diện ra đúng tiếng Anh |
-| `LocalizationTests` | 4 | lựa chọn ngôn ngữ trong app thắng hệ thống; không khoá nào lọt khỏi catalog; không khoá nào thiếu bản tiếng Anh |
-| `SettingsAccessibilityTests` | 3 | mọi control trong cửa sổ Cài đặt có nhãn trợ năng |
+| `SmokeTests` | 1 | button → controller → state, through the real `ControlPanel` |
+| `SettingsAccessibilityTests` | 2 | every control in the Settings window has an accessibility label, and the four flags are individually identifiable |
 
-Cả ba đều chốt ngôn ngữ bằng `-AppleLanguages` và bật app bằng
-`-CaffeinateUITesting` (nâng app từ `LSUIElement` lên `.regular` rồi mở
-`UITestHarnessWindow`). Thêm `-CaffeinateUITestSurface settings` thì cửa sổ host
-dựng thẳng `SettingsView` — đó là cách duy nhất chạm được vào `Settings` scene
-từ XCUITest.
+Both start the app with `-CaffeinateUITesting`, which promotes it from
+`LSUIElement` to `.regular` and opens `UITestHarnessWindow`. Adding
+`-CaffeinateUITestSurface settings` makes that host window build `SettingsView`
+directly — the only way to reach the `Settings` scene from XCUITest.
 
-## Bố cục
+## Layout
 
-| Đường dẫn | Chứa gì |
+| Path | Contents |
 |---|---|
-| `CaffeinateKit/` | SwiftPM package — toàn bộ logic. Không GUI, không chuỗi hiển thị. |
-| `Caffeinate/` | App target (SwiftUI). Thư mục đồng bộ hệ thống tệp: thêm file là Xcode tự nhận, **không cần sửa `project.pbxproj`**. |
-| `Configs/` | Cài đặt build (`.xcconfig`) và entitlements. Sửa build settings ở đây, không sửa trong pbxproj. |
-| `Scripts/` | `build.sh` (build từ dòng lệnh) và `GenerateAppIcon.swift` — icon ứng dụng là mã nguồn, không phải file nhị phân chép tay. |
-| `CaffeinateUITests/` | Test giao diện — smoke, chuyển ngữ, nhãn trợ năng. |
-| `docs/ARCHITECTURE.md` | Kiến trúc chi tiết, các bất biến, những chỗ dễ vấp. |
+| `CaffeinateKit/` | SwiftPM package — all the logic. No GUI, no display strings. |
+| `Caffeinate/` | App target (SwiftUI). A filesystem-synchronized group: adding a file is picked up by Xcode automatically, with **no need to edit `project.pbxproj`**. |
+| `Configs/` | Build settings (`.xcconfig`) and entitlements. Change build settings here, never in the pbxproj. |
+| `Scripts/` | `build.sh`, `install.sh` and `GenerateAppIcon.swift` — the app icon is source code, not a hand-copied binary. |
+| `CaffeinateUITests/` | UI tests — smoke and accessibility labels. |
+| `docs/ARCHITECTURE.md` | Detailed architecture, the invariants, and the places that are easy to get wrong. |
 
-Luồng dữ liệu chỉ có một chiều, và mọi thứ đều bám vào `CaffeineController`:
+Data flows one way, and everything hangs off `CaffeineController`:
 
 ```
-MenuBarLabel / ControlPanel / SettingsView   ← đọc @Observable
-TriggerEngine (app đang chạy · cắm sạc · màn hình ngoài)
+MenuBarLabel / ControlPanel / SettingsView   ← read @Observable
+TriggerEngine (app running · plugged in · external display)
               ↓ send(event)
         CaffeineController  →  reduce()  →  apply()  →  AssertionManager  →  IOKit
 ```
 
-`project.pbxproj` được viết tay và cố ý giữ tối giản. Tránh mở project bằng
-Xcode rồi lưu lại — Xcode sẽ viết đè và làm phình file.
+`project.pbxproj` is hand-written and deliberately minimal. Avoid opening the
+project in Xcode and saving — Xcode will rewrite it and bloat the file.
 
-## Bất biến — đừng phá
+## Invariants — do not break these
 
-1. **Một đường thay đổi trạng thái duy nhất.** `CaffeineController` là nơi *duy
-   nhất* gọi `AssertionManager.set(flags:)`. Mọi thay đổi đi qua
+1. **One path for state changes.** `CaffeineController` is the *only* caller of
+   `AssertionManager.set(flags:)`. Every change goes through
    `send(event) → reduce() → apply()`.
 
-2. **`reduce` là hàm thuần tuý.** Không I/O, không đọc đồng hồ hệ thống. Mọi mốc
-   thời gian đi vào qua sự kiện.
+2. **`reduce` is pure.** No I/O, no reading the system clock. Every instant
+   arrives through an event.
 
-3. **`CaffeinateKit` không chứa chuỗi giao diện.** Trả về kiểu dữ liệu; tầng app
-   dịch trong `Caffeinate/Localization/`. Thêm một chuỗi tiếng Việt vào package
-   là phá bản dịch tiếng Anh.
+3. **`CaffeinateKit` holds no display strings.** It returns types;
+   `Caffeinate/DisplayText.swift` is the single place that turns them into
+   sentences. Putting wording into the package is how the reason-ordering bug
+   happened once already (see ARCHITECTURE.md).
 
-4. **`AssertionManager.defaultReason` phải thuần ASCII và không được dịch.** Đó
-   là chuỗi `pmset -g assertions` in ra; chữ có dấu làm assertion thành vô danh.
+4. **`AssertionManager.defaultReason` must be pure ASCII.** That is the string
+   `pmset -g assertions` prints; non-ASCII characters make the assertion
+   anonymous, exactly when someone needs pmset to confirm the app is working.
 
-5. **Phân tầng import.** Package không import SwiftUI. `Core/` và `State/` không
-   import AppKit. App target không import IOKit.
+5. **Import layering.** The package does not import SwiftUI. `Core/` and
+   `State/` do not import AppKit. The app target does not import IOKit.
 
-6. **Nút Tắt là dứt khoát.** `stopAll` xoá cả lý do trigger đang đúng, nhưng
-   *không* reset baseline nội bộ của trigger. Đọc chú thích dài trong
-   `CaffeineController.toggle()` và `PowerSourceTrigger.refresh()` trước khi
-   động vào — đã có người "sửa" chỗ này và làm hỏng hành vi.
+6. **Stop is decisive.** `stopAll` clears even a trigger reason that is still
+   true, but does *not* reset the trigger's internal baseline. Read the long
+   comments in `CaffeineController.toggle()` and `PowerSourceTrigger.refresh()`
+   before touching this — someone has already "fixed" it into a bug.
 
-7. **Không chỗ nào được hỏng im lặng.** Create lỗi → ép về tắt + báo. Release
-   lỗi → giữ nguyên trạng thái + báo. Không nuốt lỗi nào.
+7. **Nothing fails silently.** A failed create forces the state off and reports
+   it. A failed release keeps the state and reports it. No error is swallowed.
 
-## Những chỗ dễ vấp
+## Things that are easy to get wrong
 
-- **`Settings` có hai nghĩa.** `CaffeinateKit.Settings` (cấu hình người dùng) và
-  `SwiftUI.Settings` (scene). Trong `CaffeinateApp.swift` phải viết
-  `SwiftUI.Settings { … }`, nếu không trình biên dịch báo lỗi ở một chỗ hoàn
-  toàn khác với "failed to produce diagnostic".
+- **`Settings` means two things.** `CaffeinateKit.Settings` (user configuration)
+  and `SwiftUI.Settings` (the scene). In `CaffeinateApp.swift` it has to be
+  written `SwiftUI.Settings { … }`, or the compiler reports an error somewhere
+  completely unrelated, as "failed to produce diagnostic".
 
-- **XCUITest không chịu được nhịp chạy nền.** Khi đang đếm ngược, nhãn menu bar
-  chạy `TimelineView` 1 Hz và XCUITest không bao giờ thấy app "đứng yên" → mọi
-  truy vấn hết giờ chờ. Đừng thêm UI test cho chế độ đếm ngược; phủ nó ở
+- **XCUITest cannot cope with a background tick.** During a countdown the menu
+  bar label runs at 1 Hz and XCUITest never sees the app go idle → every query
+  times out. Do not add a UI test for countdown mode; cover it in
   `CaffeineControllerTimerTests`.
 
-- **App là `LSUIElement`.** Không có icon Dock, không có cửa sổ chính, và không
-  sở hữu thanh menu hệ thống — nên ⌘W phải tự gắn lại bằng nút ẩn
-  (`CloseWindowShortcut`). UI test chạy được nhờ cờ `-CaffeinateUITesting` nâng
-  app lên `.regular` và mở `UITestHarnessWindow`.
+- **The app is `LSUIElement`.** No Dock icon, no main window, and it does not own
+  the system menu bar — so ⌘W has to be reattached with a hidden button
+  (`CloseWindowShortcut`). UI tests work because `-CaffeinateUITesting` promotes
+  the app to `.regular` and opens `UITestHarnessWindow`.
 
-- **Nhãn trợ năng không được đổi mỗi giây.** Nhãn của `CoffeeGauge` nói mốc kết
-  thúc ("hẹn giờ tới 15:47") chứ không nói thời gian còn lại, để nó đứng yên.
-  Đổi lại thành đếm ngược sẽ làm VoiceOver đọc lặp và làm hỏng UI test.
+- **The accessibility label must not change every second.** `CoffeeGauge`'s label
+  states the end time ("On, timer until 15:47") rather than the time remaining,
+  so it holds still. Turning it back into a countdown makes VoiceOver repeat
+  itself and breaks the UI test.
 
-- **`TimelineView` không chạy nhịp trong nhãn `MenuBarExtra`.** Đã đo: 2 lần vẽ
-  lại trong 8 giây. Nhãn phải đọc `controller.now` (thuộc tính `@Observable`
-  thật sự thay đổi) thì icon mới vơi dần. Đừng "dọn dẹp" bằng cách thay lại
-  bằng `TimelineView`.
+- **`TimelineView` does not tick inside a `MenuBarExtra` label.** Measured: two
+  redraws in eight seconds. The label has to read `controller.now` (an
+  `@Observable` property that genuinely changes) for the icon to drain. Do not
+  "tidy this up" by putting `TimelineView` back.
 
-- **`Toggle`/`Picker`/`Stepper` trong `Form` trên macOS KHÔNG có nhãn trợ năng.**
-  Nhãn được vẽ thành một dòng chữ riêng cạnh control chứ không gắn vào control,
-  nên VoiceOver đọc ra toàn "switch, off". Mọi control trong cửa sổ Cài đặt phải
-  có `.accessibilityLabel(…)` gắn tay, kể cả khi nhãn đã khai báo bằng chuỗi
-  thuần. `SettingsAccessibilityTests` bắt được chuyện này.
+- **`Toggle`/`Picker`/`Stepper` inside a `Form` on macOS have NO accessibility
+  label.** The label is drawn as a separate run of text beside the control
+  rather than attached to it, so VoiceOver reads everything as "switch, off".
+  Every control in the Settings window needs a hand-written
+  `.accessibilityLabel(…)`, even where the label is already a plain string.
+  `SettingsAccessibilityTests` catches this.
 
-- **`MenuBarIconState` lượng tử hoá tiến trình về 32 bậc** để làm khoá cache
-  dùng được. Bỏ lượng tử hoá là vô hiệu hoá cache.
+- **`MenuBarIconState` quantizes progress to 32 steps** so it works as a cache
+  key. Removing the quantization disables the cache.
 
-- **Đổi chuỗi giao diện thì phải cập nhật `Localizable.xcstrings` bằng tay.**
-  Thêm một `Text("…")` mới mà quên khai báo thì build KHÔNG cảnh báo gì, khoá
-  biến mất khỏi mọi bảng chuỗi, và người dùng tiếng Anh thấy tiếng Việt.
-  `LocalizationTests` bắt được cả chuyện đó lẫn chuyện quên dịch — chạy
-  `xcodebuild … test` trước khi coi là xong.
-  (`-exportLocalizations` chỉ đọc lại catalog, KHÔNG trích xuất lại từ mã, nên
-  đừng dùng nó để tìm khoá mới.)
+- **`.gitignore` works as a whitelist.** The `/*` line blocks the whole root and
+  each entry below re-opens one path. Consequence: add a new top-level directory
+  without declaring `!/name/` and `git status` shows NOTHING — the new files sit
+  silently outside the repo. The upside is that no tool droppings ever wander
+  into a commit. Inside the re-opened directories the whitelist stops applying,
+  so `.build/`, `DerivedData/` and `xcuserdata/` still have to be named
+  explicitly.
 
-- **Chuỗi nào chỉ hiện với người dùng thì phải đi qua `\.locale`.**
-  `String(localized:locale:)` KHÔNG dùng tham số `locale` để chọn bảng chuỗi —
-  chỉ để chọn luật số nhiều. Dùng nó là được một app đổi nút mà không đổi thông
-  báo. Trong view thì dùng `Text("literal")` (theo environment) hoặc
-  `resource.text(in: locale)`; ngoài view thì `LanguagePreference.resolve(_:)`.
+## Code conventions
 
-- **`.gitignore` chạy theo lối whitelist.** Dòng `/*` chặn sạch thư mục gốc,
-  bên dưới mới mở lại từng mục một. Hệ quả: thêm một thư mục mới ở gốc mà quên
-  khai báo `!/tên/` thì `git status` KHÔNG hiện gì cả — file mới im lặng nằm
-  ngoài repo. Đổi lại, không có rác nào của công cụ tự chui vào commit. Bên
-  trong các thư mục đã mở lại thì whitelist hết tác dụng, nên `.build/`,
-  `DerivedData/`, `xcuserdata/` vẫn phải nêu tên riêng.
-
-## Quy ước viết mã
-
-- Chú thích giải thích **vì sao**, không phải **cái gì**. Chỗ nào có quyết định
-  đánh đổi hoặc một cái bẫy đã vấp qua thì viết ra, kể cả dài.
-- Tên test viết bằng tiếng Việt, mô tả hành vi chứ không mô tả hàm được gọi.
-- Không thêm phụ thuộc bên thứ ba. Dự án cố ý chỉ dùng thư viện hệ thống.
+- Comments explain **why**, not **what**. Wherever there is a trade-off or a trap
+  that has already been hit, write it down, at length if needed.
+- Test names describe behaviour, not the function being called.
+- No third-party dependencies. The project deliberately uses system frameworks
+  only.

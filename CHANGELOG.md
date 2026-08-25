@@ -1,88 +1,89 @@
-# Nhật ký thay đổi
+# Changelog
 
-Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/),
-đánh số theo [Semantic Versioning](https://semver.org/lang/vi/).
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+versioned according to [Semantic Versioning](https://semver.org/).
 
-## [Chưa phát hành]
+## [Unreleased]
 
-### Thêm
+### Added
 
-- Giao diện song ngữ tiếng Việt và tiếng Anh (String Catalog, 80 khoá, có dạng
-  số nhiều thật cho tiếng Anh).
-- **Đổi ngôn ngữ ngay trong app** ở Cài đặt › Chung › Ngôn ngữ: Theo hệ thống /
-  Tiếng Việt / English. Giao diện đổi tức thì, không cần khởi động lại; các hộp
-  thoại do macOS vẽ hộ đổi từ lần mở app sau.
-- Cửa sổ Cài đặt chuẩn macOS (⌘,) chia bốn tab: Giữ thức, Tự động, Khởi động,
-  Giới thiệu. Đóng được bằng ⌘W.
-- `Scripts/GenerateAppIcon.swift` — sinh toàn bộ bộ icon ứng dụng từ mã.
-- `Scripts/build.sh` — build từ dòng lệnh, đặt sản phẩm ở một chỗ cố định
-  (`build/Caffeinate.app`) và **chặn bản Release không universal**, thay vì để
-  chuyện đó thành một mục trong danh sách phải nhớ.
-- `Scripts/install.sh` — dựng rồi đặt vào `/Applications` bằng một lệnh, cho
-  người vừa clone repo về. Nó lo ba việc mà một dòng `cp -R` bỏ sót: bảo bản
-  đang chạy thoát để nó kịp ghi cài đặt và nhả assertion, thay hẳn bundle cũ
-  thay vì trộn vào nó, và mở app lên — với một app thanh menu thuần thì chép
-  xong chẳng có gì hiện ra để biết là đã cài được.
-- `.gitignore` chuyển sang lối whitelist: chặn hết ở gốc rồi mở lại đúng những
-  thư mục thuộc về dự án, để rác của công cụ không lọt vào commit chỉ vì chưa
-  ai gặp nó bao giờ.
-- Cài đặt build tách ra `Configs/*.xcconfig`, có chú thích cho từng lựa chọn.
-- 23 unit test mới cho lược đồ cài đặt, ưu tiên trigger, hẹn giờ và trạng thái
-  icon (46 → 69), cùng 5 test giao diện cho phần chuyển ngữ: lựa chọn trong app
-  thắng ngôn ngữ hệ thống (cả hai chiều), không chuỗi nào trong mã bị bỏ quên
-  khỏi catalog, và không khoá nào thiếu bản dịch tiếng Anh.
-- 3 test giao diện cho cửa sổ Cài đặt, vốn trước đó không có test nào: mọi
-  control phải có nhãn trợ năng, bốn cờ phải nhận ra được từng cái, và cửa sổ
-  phải đổi ngôn ngữ theo. `UITestHarnessWindow` nhận thêm cờ
-  `-CaffeinateUITestSurface settings` để mở được cửa sổ đó từ test.
+- A standard macOS Settings window (⌘,) split into four tabs: General,
+  Automatic, Startup, About. Closes with ⌘W.
+- `Scripts/GenerateAppIcon.swift` — generates the whole app icon set from code.
+- `Scripts/build.sh` — builds from the command line, puts the product somewhere
+  predictable (`build/Caffeinate.app`) and **rejects a non-universal Release
+  build**, rather than leaving that as an item someone has to remember.
+- `Scripts/install.sh` — build and install into `/Applications` in one command,
+  for someone who has just cloned the repo. It handles three things a bare
+  `cp -R` misses: asking the running copy to quit so it can write its settings
+  and release its assertion, replacing the old bundle outright instead of
+  merging into it, and opening the app — with a pure menu bar app, copying it
+  leaves nothing on screen to confirm it worked.
+- `.gitignore` moved to a whitelist: block everything at the root and re-open
+  exactly the directories that belong to the project, so tool droppings cannot
+  reach a commit merely because nobody has hit them yet.
+- Build settings extracted into `Configs/*.xcconfig`, with a comment on every
+  choice.
+- 23 new unit tests covering the settings schema, trigger precedence, timers and
+  icon state (46 → 69).
+- 2 UI tests for the Settings window, which previously had none: every control
+  must carry an accessibility label, and the four flags must be individually
+  identifiable. `UITestHarnessWindow` gained a `-CaffeinateUITestSurface
+  settings` flag so the window can be opened from a test at all.
 
-### Thay đổi
+### Changed
 
-- **Caffeinate trở thành ứng dụng thanh menu thuần** (`LSUIElement`): không còn
-  icon Dock và không còn cửa sổ chính. Toàn bộ điều khiển nằm trong panel trên
-  thanh menu; cấu hình nằm ở cửa sổ Cài đặt.
-- Icon ứng dụng vẽ lại: nền gradient nâu ấm, ly sứ nét dày, đúng lưới icon
-  macOS (thân 824 trong khung 1024) và góc bo siêu ellipse.
-- `CaffeinateKit` không còn chứa chuỗi giao diện nào. Lỗi trở thành
-  `AssertionFailure` có kiểu, phân biệt "không giữ được" với "không gỡ được".
-- Thứ tự ưu tiên khi nhiều luật tự động cùng đúng nay là `Comparable` tường
-  minh thay vì sắp xếp theo chuỗi tiếng Việt — đổi ngôn ngữ không còn lặng lẽ
-  đổi lý do được hiển thị.
-- `bundle identifier` đổi thành `io.github.quochung-bic.Caffeinate`. Bản dựng
-  mới không đọc được cài đặt của bản cũ (`com.caffeinate.app`).
-- Bản Release không còn tiêm entitlement `get-task-allow`.
+- **Caffeinate is now a pure menu bar app** (`LSUIElement`): no Dock icon and no
+  main window. Every control lives in the menu bar panel; configuration lives in
+  the Settings window.
+- The interface is English only. An earlier iteration shipped a Vietnamese and
+  English interface with an in-app language switcher, built on a String Catalog;
+  it was removed along with the catalog, the `\.locale` plumbing and the six UI
+  tests that existed to guard it. The layering it motivated survives:
+  `DisplayText.swift` is still the only place core types become sentences.
+- Redrawn app icon: warm brown gradient background, a thick-stroked ceramic cup,
+  on the correct macOS icon grid (an 824 body inside a 1024 canvas) with
+  superellipse corners.
+- `CaffeinateKit` contains no display strings at all. Errors became a typed
+  `AssertionFailure` that distinguishes "could not hold" from "could not
+  release".
+- Precedence among simultaneously-true automation rules is now an explicit
+  `Comparable` rather than a sort over display strings — so wording can no
+  longer silently change which reason is shown.
+- The bundle identifier changed to `io.github.quochung-bic.Caffeinate`. A new
+  build cannot read settings written by the old one (`com.caffeinate.app`).
+- Release builds no longer inject the `get-task-allow` entitlement.
 
-### Sửa
+### Fixed
 
-- **Mọi control trong cửa sổ Cài đặt đều không có nhãn trợ năng.** Chín công
-  tắc, một menu chọn và một stepper đọc ra với VoiceOver chỉ là "switch, off" —
-  không phân biệt được cái nào với cái nào. Nguyên nhân: trong `Form` trên
-  macOS, nhãn được vẽ cạnh control chứ không gắn vào control, kể cả khi khai
-  báo bằng chuỗi thuần.
-- Hai nhánh `default: ""` trong cầu nối chuyển ngữ sinh ra một khoá dịch RỖNG
-  trong catalog. Do chính test mới phát hiện.
+- **No control in the Settings window had an accessibility label.** Nine
+  switches, a pop-up button and a stepper all read out under VoiceOver as
+  "switch, off", with nothing to tell them apart. Cause: in a `Form` on macOS
+  the label is drawn beside the control rather than attached to it, even when
+  declared as a plain string.
+- The lifecycle hook (`willTerminate`) was registered non-idempotently: every
+  time SwiftUI rebuilt the menu bar label it added another observer, so
+  `shutdown()` ran repeatedly at exit. The observation is now RAII and removes
+  itself with its owner.
+- Settings were wiped whenever a key was missing: the synthesized `Codable`
+  threw and the store fell back to defaults. Decoding is now lenient per key,
+  with value normalization (clamping the duration, dropping duplicate and empty
+  bundle IDs).
+- The coffee cup's accessibility element was rebuilt 24 times a second, costing
+  VoiceOver its anchor. The label now holds still for the whole timer, stating
+  the end time rather than the time remaining.
 
-- Móc vòng đời (`willTerminate`) đăng ký không idempotent: mỗi lần SwiftUI dựng
-  lại nhãn menu bar là thêm một observer, nên `shutdown()` chạy nhiều lần lúc
-  thoát. Quan sát nay theo kiểu RAII, tự gỡ khi hết vòng đời.
-- Cài đặt bị xoá sạch khi thiếu một khoá: `Codable` sinh tự động ném lỗi và
-  store rơi về mặc định. Nay giải mã khoan dung theo từng khoá, kèm chuẩn hoá
-  giá trị (kẹp thời lượng, loại bundle ID trùng/rỗng).
-- Phần tử trợ năng của ly cà phê bị dựng lại 24 lần mỗi giây, làm VoiceOver mất
-  chỗ bám. Nay nhãn đứng yên suốt lần hẹn giờ (nói mốc kết thúc thay vì thời
-  gian còn lại).
+### Performance
 
-### Hiệu suất
-
-- Ly cà phê và số đếm ngược nay chỉ tồn tại khi panel đang mở, thay vì chạy
-  liên tục trong một cửa sổ chính luôn mở. Ở trạng thái thường trực, app không
-  vẽ gì cả.
-- Phần tính trạng thái icon trở thành thuần tuý (`iconState(at: Date)`), test
-  được mà không cần chờ đồng hồ thật. Nhịp 1 Hz vẫn do controller phát nhưng
-  chỉ sống khi `timerEndsAt != nil` — bắt buộc phải như vậy, vì đo được rằng
-  `TimelineView` không chạy nhịp bên trong nhãn `MenuBarExtra`.
-- `MenuBarIconState` lượng tử hoá tiến trình về 32 bậc (dưới ngưỡng một pixel ở
-  18pt) và `MenuBarIcon` có cache: một lần hẹn giờ 8 tiếng dựng 32 tấm ảnh thay
-  vì 28.800.
-- Ly cà phê hạ từ 24 xuống 20 fps và tách khỏi phần đếm ngược 1 Hz, nên mỗi
-  thành phần chỉ vẽ đúng nhịp nó cần.
+- The coffee cup and the countdown number now exist only while the panel is
+  open, instead of running continuously inside an always-open main window. At
+  rest, the app draws nothing.
+- Icon state became a pure computation (`iconState(at: Date)`), testable without
+  waiting on a real clock. The controller still emits the 1 Hz tick, but it
+  lives only while `timerEndsAt != nil` — and it has to work that way, because
+  `TimelineView` was measured not to tick inside a `MenuBarExtra` label.
+- `MenuBarIconState` quantizes progress to 32 steps (below one pixel at 18pt)
+  and `MenuBarIcon` caches: an eight-hour timer builds 32 images instead of
+  28,800.
+- The coffee cup dropped from 24 to 20 fps and was separated from the 1 Hz
+  countdown, so each component draws only at the rate it needs.

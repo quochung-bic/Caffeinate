@@ -1,17 +1,17 @@
-# Kiến trúc
+# Architecture
 
-Tài liệu này giải thích *vì sao* Caffeinate được dựng như hiện tại. Phần *cái
-gì* nằm trong [README](../README.md); phần hướng dẫn thao tác nằm trong
+This document explains *why* Caffeinate is built the way it is. The *what* is in
+the [README](../README.md); the how-to-work-here notes are in
 [CLAUDE.md](../CLAUDE.md).
 
-## Toàn cảnh
+## The whole picture
 
 ```
                        ┌─────────────────────────────┐
-   thanh menu ────────▶│      MenuBarLabel           │
-                       │  (nhịp 1 Hz khi đếm ngược)  │
+   menu bar ──────────▶│      MenuBarLabel           │
+                       │ (1 Hz only while counting)  │
                        └──────────────┬──────────────┘
-                                      │ đọc
+                                      │ reads
    panel  ────────────▶ ControlPanel ─┤
    ⌘,     ────────────▶ SettingsView ─┤
                                       ▼
@@ -30,242 +30,214 @@ gì* nằm trong [README](../README.md); phần hướng dẫn thao tác nằm t
                    └─────────────────┘  └────────────────────────────────┘
 ```
 
-## Vì sao lõi là một package riêng
+## Why the core is a separate package
 
-`CaffeinateKit` không phải là chia nhỏ cho có. Nó tạo ra một ranh giới mà trình
-biên dịch ép buộc được: package không thể import SwiftUI, nên không có cách nào
-để logic trạng thái lén phụ thuộc vào một `@State` nào đó. Hệ quả thực tế là
-`swift test` chạy 69 test trong chưa tới một phần mười giây mà không cần dựng
-ứng dụng, không cần GUI, và không cần đụng vào hệ thống thật.
+`CaffeinateKit` is not decomposition for its own sake. It creates a boundary the
+compiler can enforce: the package cannot import SwiftUI, so there is no way for
+state logic to quietly acquire a dependency on some `@State`. The practical
+result is that `swift test` runs 69 tests in under a tenth of a second without
+building the app, without a GUI, and without touching the real system.
 
-Ranh giới ấy chỉ có giá trị nếu được giữ. Ba luật:
+That boundary is only worth anything if it is kept. Three rules:
 
-- Package không import SwiftUI.
-- `Core/` và `State/` không import AppKit.
-- App target không import IOKit.
+- The package does not import SwiftUI.
+- `Core/` and `State/` do not import AppKit.
+- The app target does not import IOKit.
 
-## Vì sao chỉ một đường thay đổi trạng thái
+## Why there is one path for state changes
 
-`CaffeineController` là nơi duy nhất gọi `AssertionManager.set(flags:)`. Mọi
-thay đổi đi qua `send(event) → reduce() → apply()`.
+`CaffeineController` is the only caller of `AssertionManager.set(flags:)`. Every
+change goes through `send(event) → reduce() → apply()`.
 
-Điều này đắt hơn việc gọi thẳng, và nó đáng giá vì một lý do cụ thể: assertion
-IOKit là tài nguyên *ngoài* tiến trình. Nếu có hai đường ghi, sẽ có lúc trạng
-thái trong app và trạng thái thật của hệ thống lệch nhau, và không ai biết cái
-nào đúng. Với một đường duy nhất, `state.effectiveFlags` *là* định nghĩa của
-những gì hệ thống đang giữ.
+This costs more than calling directly, and it earns that cost for one concrete
+reason: an IOKit assertion is a resource that lives *outside* the process. With
+two write paths, the app's state and the system's real state eventually
+disagree, and nothing tells you which is right. With one path,
+`state.effectiveFlags` *is* the definition of what the system is holding.
 
-`reduce` thuần tuý — không I/O, không đọc `Date()`. Mọi mốc thời gian đi vào qua
-sự kiện (`.startedTimer(until:)`). Nhờ vậy mọi chuyển tiếp trạng thái đều test
-được mà không cần chờ đồng hồ thật chạy.
+`reduce` is pure — no I/O, no reading `Date()`. Every instant arrives through an
+event (`.startedTimer(until:)`). That makes every state transition testable
+without waiting on a real clock.
 
-## Vì sao lõi không biết tiếng nào
+## Why the core holds no words
 
-Ban đầu `AssertionFlags` có `displayName` trả về `"Hệ thống"`. Nó tiện, và nó
-sai theo hai cách:
+`AssertionFlags` originally had a `displayName` returning `"System"`. It was
+convenient, and it was wrong in two ways:
 
-1. Package bị khoá vào một ngôn ngữ. Thêm tiếng Anh sẽ phải sửa lõi.
-2. Nó lặng lẽ chui vào logic. `CaffeineState.activeReason` chọn lý do hiển thị
-   bằng cách **sắp xếp theo chuỗi tiếng Việt** — nghĩa là đổi ngôn ngữ giao diện
-   sẽ đổi luôn lý do nào được hiển thị. Một bug không ai đoán ra được cho tới
-   khi nó xảy ra.
+1. It put presentation inside the core, so the package could not be tested or
+   reasoned about without dragging wording along.
+2. It leaked into logic. `CaffeineState.activeReason` picked which reason to
+   display by **sorting the display strings** — so changing the interface
+   language changed which reason the user saw. That is not a bug anyone predicts
+   in advance; it is one you discover.
 
-Nay package trả về dữ liệu (`AssertionFlags.identifier`, `TriggerReason`,
-`AssertionFailure`) và `Caffeinate/Localization/CaffeinateKit+Localized.swift`
-là chỗ duy nhất biến chúng thành câu chữ. Thứ tự ưu tiên trigger là một
-`Comparable` tường minh, độc lập ngôn ngữ.
+Today the package returns data (`AssertionFlags.identifier`, `TriggerReason`,
+`AssertionFailure`) and `Caffeinate/DisplayText.swift` is the single place that
+turns those into sentences. Trigger precedence is an explicit `Comparable`,
+independent of any wording.
 
-Ngoại lệ duy nhất: `AssertionManager.defaultReason`. Đó không phải chuỗi giao
-diện mà là chuỗi hệ điều hành đọc — nó hiện ra trong `pmset -g assertions`. Phải
-thuần ASCII (chữ có dấu làm assertion thành vô danh) và không bao giờ dịch.
+The one exception is `AssertionManager.defaultReason`. That is not interface
+text but a string the operating system reads back — it shows up in
+`pmset -g assertions`. It must be pure ASCII (accented characters make the
+assertion anonymous) and must never be reworded casually.
 
-## Đổi ngôn ngữ trong app hoạt động thế nào
+## Why the app is English-only
 
-macOS đã có sẵn cơ chế chọn ngôn ngữ theo từng app (System Settings › General ›
-Language & Region › Applications), nhưng nó bị chôn sâu tới mức phần lớn người
-dùng không biết là có. Caffeinate đưa lựa chọn đó vào Cài đặt › Chung.
+Earlier versions shipped a Vietnamese and English interface with an in-app
+language switcher, built on a String Catalog and `EnvironmentValues.locale`.
+That was removed deliberately: the app is maintained in English, and a second
+language meant a catalog to hand-maintain, a `\.locale` discipline every new
+view had to follow, and six UI tests whose only job was guarding the
+translation machinery.
 
-Có hai kênh, và chúng lo hai phần khác nhau:
+What survives the removal is the *layering*, not the localization:
+`DisplayText.swift` still exists, and the core still returns types rather than
+strings. That is worth keeping on its own merits — it is what stops wording from
+leaking back into `reduce`, which is exactly how the sorting bug above happened.
 
-| Kênh | Đổi cái gì | Khi nào có hiệu lực |
-|---|---|---|
-| `EnvironmentValues.locale` bơm vào gốc mỗi scene | mọi thứ do app tự vẽ | ngay lập tức |
-| `AppleLanguages` ghi vào miền UserDefaults của app | hộp thoại do macOS vẽ hộ | từ lần mở app sau |
+Two consequences worth knowing:
 
-Kênh thứ hai chính là cơ chế mà System Settings dùng, nên hai nơi không đánh
-nhau. Kênh thứ nhất là thứ làm cho việc đổi ngôn ngữ không cần khởi động lại —
-đã đo: ép `.environment(\.locale, "en")` trong khi tiến trình chạy tiếng Việt
-thì nhãn nút ra tiếng Anh ngay.
+- Plural forms are now spelled out in `Plural.minutes(_:)` rather than handled by
+  the catalog. It is one function, and it keeps "1 minute" from rendering as
+  "1 minutes".
+- The UI tests no longer pin `-AppleLanguages`, because the interface no longer
+  varies with it. That also removes a class of flakiness: the suite used to go
+  red on any machine where the app's language had ever been chosen, since the
+  preference persisted in UserDefaults between runs.
 
-### Cái bẫy: `String(localized:locale:)` không làm việc bạn tưởng
+## Accessibility labels in the Settings window must be set by hand
 
-Tham số `locale` của `String(localized:)` **không** dùng để chọn bảng chuỗi. Nó
-chỉ chọn luật số nhiều; bảng thì vẫn lấy theo ngôn ngữ của tiến trình. Đã đo:
-gọi với `locale: "vi"` trên một máy chạy tiếng Anh vẫn trả về `"Stop"`, và tệ
-hơn, nó ghép luật số nhiều tiếng Việt (chỉ có dạng `other`) vào câu tiếng Anh,
-cho ra `"1 minutes left"`.
+In a `Form` on macOS, the label of a `Toggle`, `Picker` or `Stepper` is drawn as
+its OWN run of text beside the control rather than attached to it. The
+consequence: VoiceOver reads out nine identical switches — "switch, off" — with
+no way to tell "Display" from "Plugged into power".
 
-Dùng nó cho phần chuyển ngữ sẽ ra một app đổi được nút nhưng không đổi được
-thông báo. Cách đúng cho các chuỗi ngoài SwiftUI là `LocalizedStringResource` có
-gán `locale` — cái đó chọn bảng thật. Vì vậy:
+This holds even when the label is declared as a plain string
+(`Toggle("Plugged into power", isOn:)`), so it is not a side effect of using a
+`VStack` as the label. Every control in the Settings window needs a hand-written
+`.accessibilityLabel(…)`.
 
-- trong view, chuỗi literal đi qua `Text("…")` (SwiftUI tra theo environment);
-- chuỗi đến từ `CaffeinateKit` đi qua `resource.text(in: locale)`;
-- ngoài view (thông báo, nhãn VoiceOver của icon menu bar) đi qua
-  `LanguagePreference.resolve(_:)`.
+The bug survived as long as it did because the Settings window is a `Settings`
+scene that XCUITest cannot open from outside — meaning that part of the app had
+no tests at all. The real fix was not to remember harder but to make it
+testable: `UITestHarnessWindow` gained a `-CaffeinateUITestSurface settings`
+flag so it can host `SettingsView` itself, and `SettingsAccessibilityTests`
+walks every tab checking that no control has an empty label. That test
+immediately found the same fault on the other two tabs.
 
-### Ba lớp test giữ cho bản dịch không mục
+## Why there is no main window
 
-`LocalizationTests` khoá lại ba thứ khác nhau, và mỗi cái từng thật sự đỏ trong
-lúc dựng tính năng này:
+The first version had a three-tab main window alongside the menu bar panel.
+Nearly all of the app's lifecycle complexity was in coordinating the two:
 
-1. **Lựa chọn trong app thắng ngôn ngữ hệ thống** — chạy app với
-   `-AppleLanguages (vi)` nhưng `-preferredLanguage en`, và ngược lại.
-2. **Không chuỗi nào trong mã bị bỏ quên khỏi catalog.** Đối chiếu các file
-   `.stringsdata` trình biên dịch sinh ra với bảng tiếng Việt. Cần thiết vì
-   thiếu khai báo thì build không cảnh báo gì cả — khoá đơn giản là biến mất
-   khỏi mọi bảng, và SwiftUI hiển thị luôn chuỗi tiếng Việt viết trong mã.
-   Test này bắt được một khoá RỖNG ngay lần chạy đầu tiên, sinh ra từ một nhánh
-   `default: ""`.
-3. **Không khoá nào trong catalog thiếu bản dịch tiếng Anh.** Đối chiếu bảng
-   tiếng Việt với bảng tiếng Anh trong app bundle đã biên dịch.
+- an `NSApplicationDelegate` guessing whether to open a window at launch — and
+  the right answer differed depending on whether the app was opened by hand, by
+  a login item, or by clicking the menu bar icon;
+- an `NSWindow.didBecomeKeyNotification` watcher filtering for `NSPanel` so the
+  main window closed when the panel appeared;
+- a counter of window-open requests, because with a `Bool` flag two consecutive
+  requests swallowed the second.
 
-Cách kiểm tra ở mục 3 được chọn sau khi cách hiển nhiên hơn tỏ ra vô dụng: ban
-đầu test đi tìm những khoá mà bản tiếng Anh trùng bản gốc. Thử gỡ hẳn một bản
-dịch rồi chạy lại thì test vẫn xanh — trình biên dịch String Catalog không ghi
-khoá chưa dịch vào `en.lproj` chút nào. Một test không bao giờ đỏ được thì không
-bảo vệ được gì, nên cả ba lớp trên đều đã được kiểm chứng bằng cách cố tình làm
-hỏng rồi xem nó có đỏ không.
+`LSUIElement = YES` deleted all three. The menu bar icon is the only surface
+that always exists; the Settings window is a secondary view whose being open or
+closed has no bearing on whether the app is holding the Mac awake.
 
-## Nhãn trợ năng trong cửa sổ Cài đặt phải gắn tay
+The price: an accessory app does not own the system menu bar, so ⌘W does not
+come for free. It is reattached with a hidden button (`CloseWindowShortcut`) —
+a small debt, stated plainly, in exchange for deleting the three mechanisms
+above.
 
-Trong `Form` trên macOS, nhãn của `Toggle`, `Picker` và `Stepper` được vẽ thành
-một dòng chữ RIÊNG nằm cạnh control chứ không gắn vào chính control. Hệ quả:
-VoiceOver đọc ra chín cái công tắc giống hệt nhau — "switch, off" — không phân
-biệt được cái nào là "Màn hình" và cái nào là "Đang cắm sạc".
+## Why each thing has its own tick
 
-Điều này đúng kể cả khi nhãn được khai báo bằng chuỗi thuần
-(`Toggle("Đang cắm sạc", isOn:)`), nên nó không phải hậu quả của việc dùng
-`VStack` làm nhãn. Mọi control trong cửa sổ Cài đặt đều phải có
-`.accessibilityLabel(…)` gắn tay.
+This app exists to manage power, so burning CPU on animation would contradict
+itself. Three clocks, each running only when needed:
 
-Lỗi này tồn tại được vì cửa sổ Cài đặt là một `Settings` scene mà XCUITest không
-mở được từ ngoài — tức là phần đó của app không có test nào. Cách sửa gốc không
-phải là nhớ kỹ hơn mà là làm cho nó test được: `UITestHarnessWindow` nhận thêm
-cờ `-CaffeinateUITestSurface settings` để host chính `SettingsView`, và
-`SettingsAccessibilityTests` đi qua từng tab kiểm tra rằng không control nào có
-nhãn rỗng. Test đó phát hiện ra hai tab còn lại cũng hỏng y hệt.
-
-## Vì sao app không có cửa sổ chính
-
-Bản đầu có cửa sổ chính ba tab bên cạnh panel menu bar. Gần như toàn bộ độ phức
-tạp vòng đời của app nằm ở việc điều phối hai thứ đó:
-
-- một `NSApplicationDelegate` đoán xem lúc khởi động có nên mở cửa sổ không —
-  và câu trả lời khác nhau tuỳ app được mở bằng tay, bởi login item, hay bằng
-  cách bấm icon menu bar;
-- một bộ theo dõi `NSWindow.didBecomeKeyNotification` lọc ra `NSPanel` để đóng
-  cửa sổ chính khi panel bật lên;
-- một bộ đếm yêu cầu mở cửa sổ, vì dùng cờ `Bool` thì hai yêu cầu liên tiếp nuốt
-  mất cái thứ hai.
-
-`LSUIElement = YES` xoá cả ba. Icon trên thanh menu là bề mặt duy nhất luôn tồn
-tại; cửa sổ Cài đặt là khung nhìn phụ, mở hay đóng không ảnh hưởng gì tới việc
-app có đang giữ máy thức hay không.
-
-Cái giá phải trả: app ở chế độ phụ trợ không sở hữu thanh menu hệ thống, nên ⌘W
-không tự có. Nó được gắn lại bằng một nút ẩn (`CloseWindowShortcut`) — nói rõ ra
-là một khoản nợ nhỏ, đổi lấy việc xoá ba cơ chế ở trên.
-
-## Vì sao mỗi thứ có một nhịp riêng
-
-Ứng dụng này tồn tại để quản lý năng lượng, nên đốt CPU cho hoạt ảnh là tự mâu
-thuẫn. Ba nhịp, mỗi cái chỉ chạy khi cần:
-
-| Thành phần | Nhịp | Chạy khi | Ai đánh nhịp |
+| Component | Rate | Runs when | Driven by |
 |---|---|---|---|
-| Ly cà phê (khói + mực) | 20 fps | đang hoạt động **và** panel đang mở | `TimelineView` |
-| Số đếm ngược | 1 Hz | có hẹn giờ **và** panel đang mở | `TimelineView` |
-| Nhãn menu bar | 1 Hz | **chỉ khi có hẹn giờ** | `CaffeineController.now` |
-| Nhãn trợ năng | không có nhịp | — | — |
+| Coffee cup (steam + level) | 20 fps | active **and** the panel is open | `TimelineView` |
+| Countdown number | 1 Hz | a timer exists **and** the panel is open | `TimelineView` |
+| Menu bar label | 1 Hz | **only while a timer exists** | `CaffeineController.now` |
+| Accessibility label | no tick | — | — |
 
-Điểm quan trọng: trước đây ly cà phê chạy 24 fps trong một cửa sổ chính **luôn
-mở**, và số đếm ngược nằm chung khối đó. Nay cả hai chỉ tồn tại khi panel đang
-hiển thị, còn khi panel đóng thì SwiftUI không kết xuất chúng nữa — nghĩa là ở
-trạng thái thường trực, app không vẽ gì cả.
+The key point: the cup used to run at 24 fps inside a main window that was
+**always open**, with the countdown in the same block. Now both exist only while
+the panel is showing, and when it closes SwiftUI stops rendering them — so at
+rest, the app draws nothing at all.
 
-Nhãn menu bar là ngoại lệ, và nó không dùng `TimelineView`. Đây là một kết luận
-từ **đo đạc chứ không phải suy đoán**: một nhãn `MenuBarExtra` dựng bằng
-`TimelineView(.periodic(by: 1))` chỉ được vẽ lại **2 lần trong 8 giây** đang đếm
-ngược, và cả hai lần đều do trạng thái đổi. SwiftUI kết xuất nhãn ấy vào một
-`NSStatusItem`, và trong khung đó `TimelineView` không chạy. Hậu quả nếu để
-nguyên: icon đứng im ở mức đầy suốt lần hẹn giờ — mất đúng thứ khiến nó đáng có
-mặt trên thanh menu.
+The menu bar label is the exception, and it does not use `TimelineView`. This is
+a conclusion from **measurement, not reasoning**: a `MenuBarExtra` label built
+on `TimelineView(.periodic(by: 1))` redrew **twice in eight seconds** of an
+active countdown, and both redraws came from state changes. SwiftUI renders that
+label into an `NSStatusItem`, and inside that frame `TimelineView` does not
+tick. Left alone, the icon would sit at full for the whole timer — losing the
+one thing that earns it a place on the menu bar.
 
-Cách đáng tin duy nhất là cho nhãn đọc một thuộc tính `@Observable` thật sự thay
-đổi. Vì vậy `CaffeineController` giữ một `now` và một `Task` nhịp 1 Hz — nhưng
-`Task` đó **chỉ sống khi `timerEndsAt != nil`**, và phần tính toán vẫn thuần
-tuý: `iconState(at: Date)` nhận thời điểm từ ngoài nên test được mà không cần
-chờ đồng hồ thật.
+The only reliable approach is to have the label read an `@Observable` property
+that genuinely changes. So `CaffeineController` keeps a `now` and a 1 Hz `Task`
+— but that `Task` **lives only while `timerEndsAt != nil`**, and the arithmetic
+stays pure: `iconState(at: Date)` takes its instant from the caller, so it is
+testable without a real clock.
 
-Nhãn menu bar còn được bảo vệ thêm bằng lượng tử hoá: `MenuBarIconState` làm
-tròn tiến trình về 32 bậc. Lòng ly cao 8.8pt, ở màn hình 2x là 18 pixel — mọi
-thay đổi nhỏ hơn 1/32 rơi vào cùng một pixel. Nhờ đó trạng thái trở thành khoá
-cache dùng được, và một lần hẹn giờ 8 tiếng dựng 32 tấm ảnh thay vì 28.800.
+The label is protected further by quantization: `MenuBarIconState` rounds
+progress to 32 steps. The cup interior is 8.8pt tall, which is 18 pixels on a 2x
+display — every change smaller than 1/32 lands on the same pixel. That turns the
+state into a usable cache key, so an eight-hour timer builds 32 images instead
+of 28,800.
 
-## Vì sao nhãn trợ năng nói mốc kết thúc
+## Why the accessibility label states the end time
 
-`CoffeeGauge` từng đặt cả khối trong một `TimelineView` 24 fps, nên phần tử trợ
-năng bọc ngoài bị dựng lại mỗi khung hình. Hai hậu quả:
+`CoffeeGauge` used to put the whole block inside a 24 fps `TimelineView`, so the
+accessibility element wrapping it was rebuilt every frame. Two consequences:
 
-- VoiceOver mất chỗ bám và đọc lại nhãn không ngừng;
-- một truy vấn XCUITest lên cây đó chạy tới lúc hết giờ chờ mà không xong.
+- VoiceOver lost its anchor and read the label over and over;
+- an XCUITest query against that tree ran until it timed out.
 
-Nay nhãn nói **"Đang bật, hẹn giờ tới 15:47"** thay vì **"Đang bật, còn 14
-phút"**. Nó chính xác hơn khi đọc thành lời, và đứng yên suốt lần hẹn giờ.
+The label now says **"On, timer until 15:47"** rather than **"On, 14 minutes
+left"**. It is more precise read aloud, and it holds still for the whole timer.
 
-## Vì sao cài đặt được giải mã khoan dung
+## Why settings decoding is lenient
 
-Cài đặt là dữ liệu của người dùng và sống lâu hơn mọi phiên bản app. `Codable`
-sinh tự động ném lỗi khi thiếu một khoá, và `UserDefaultsSettingsStore` bắt lỗi
-đó bằng cách trả về `Settings()` — tức là **xoá sạch cấu hình** chỉ vì bản app
-cũ chưa ghi một trường mới.
+Settings are the user's data and outlive every version of the app. The
+synthesized `Codable` throws on a missing key, and
+`UserDefaultsSettingsStore` catches that by returning `Settings()` — which
+**wipes the configuration** merely because an older build never wrote a newer
+field.
 
-Nay mỗi trường được đọc độc lập bằng `decodeIfPresent`, kèm `normalize()` kẹp
-giá trị về khoảng hợp lệ (kể cả khi chúng tới từ một file plist sửa tay). Trường
-`schemaVersion` được ghi ra để sau này còn chỗ bám khi cần migrate thật — tức là
-khi *ý nghĩa* của một trường đã có thay đổi, chứ không phải khi thêm trường mới.
+Now each field is read independently with `decodeIfPresent`, plus a
+`normalize()` that clamps values into range (including when they arrive from a
+hand-edited plist). A `schemaVersion` is written so a real migration has
+something to hang off later — that is, when the *meaning* of an existing field
+changes, not when a field is added.
 
-## Vì sao "Tắt" không tự bật lại
+## Why "Stop" does not switch itself back on
 
-Đây là chỗ tinh tế nhất của app, và đã có người "sửa" nó thành lỗi.
+This is the subtlest part of the app, and someone has already "fixed" it into a
+bug once.
 
-`.stopAll` xoá `manual`, `timerEndsAt` và **mọi lý do trigger trong `state`** —
-nhưng *không* đụng tới trạng thái nội bộ của từng trigger. `PowerSourceTrigger`
-vẫn giữ `isCharging == true` nếu máy vẫn đang cắm sạc, và nó chỉ phát
-`.triggerFired` trên một chuyển tiếp `false → true` thật sự.
+`.stopAll` clears `manual`, `timerEndsAt` and **every trigger reason in
+`state`** — but does *not* touch each trigger's internal state.
+`PowerSourceTrigger` keeps `isCharging == true` while the Mac is still plugged
+in, and only emits `.triggerFired` on a genuine `false → true` transition.
 
-Nếu reset baseline lúc `stopAll`, thông báo nguồn điện kế tiếp (mà điều kiện
-chưa hề đổi) sẽ bật lại luật ngay lập tức — nút Tắt mất hết ý nghĩa.
+Reset that baseline on `stopAll` and the next power notification — with the
+condition entirely unchanged — re-enables the rule immediately, and the Stop
+button means nothing.
 
-Có một trường hợp biên đã được chấp nhận và cố ý không sửa: nếu người dùng đổi
-một setting bất kỳ, `rebuildTriggers()` chạy lại, bộ trigger mới tự `refresh()`
-và có thể bật lại luật đó ngay. Đó là hệ quả hợp lý của "đánh giá lại từ đầu",
-và thêm state để chặn nó sẽ đắt hơn giá trị thu được.
+One edge case is accepted and deliberately not fixed: if the user changes any
+setting, `rebuildTriggers()` runs, the new trigger set calls `refresh()`, and
+that rule may come straight back. That is the consistent consequence of
+re-evaluating from scratch, and adding state to prevent it would cost more than
+it is worth.
 
-## Kiểm thử
+## Testing
 
-| Tầng | Công cụ | Phủ gì |
+| Layer | Tool | Covers |
 |---|---|---|
-| Lõi | `swift test` (69 test) | reduce, assertion, trigger, lược đồ cài đặt, hẹn giờ, vẽ icon |
-| IOKit thật | `IOKitBackingTests` | tạo assertion thật rồi đọc lại bằng `pmset -g assertions` |
-| Giao diện | `CaffeinateUITests` (9 test) | nút → controller → state qua `UITestHarnessWindow`; chuyển ngữ ở cả ba lớp; nhãn trợ năng của mọi control trong cửa sổ Cài đặt |
+| Core | `swift test` (69 tests) | reduce, assertions, triggers, the settings schema, timers, icon rendering |
+| Real IOKit | `IOKitBackingTests` | creates a real assertion and reads it back with `pmset -g assertions` |
+| Interface | `CaffeinateUITests` (3 tests) | button → controller → state through `UITestHarnessWindow`; an accessibility label on every control in the Settings window |
 
-Smoke test giao diện cố ý ít: XCUITest không chịu được nhịp chạy nền 1 Hz của
-chế độ đếm ngược, và bẻ cong ứng dụng cho vừa công cụ là cái giá không đáng trả.
-Phần đếm ngược được phủ tất định ở tầng lõi.
-
-Cả hai smoke test đều chốt ngôn ngữ bằng `-AppleLanguages`. Không chốt thì kết
-quả phụ thuộc vào cài đặt của máy đang chạy — và đó không phải giả thuyết: bộ
-test này đã đỏ đúng một lần vì máy phát triển đặt `en-VN`, nên app hiện ra tiếng
-Anh trong khi test khẳng định theo nhãn tiếng Việt.
+There are deliberately few UI tests: XCUITest cannot cope with the 1 Hz
+background tick of countdown mode, and bending the app to suit the tool is not a
+price worth paying. Countdown behaviour is covered deterministically at the core
+layer instead.
