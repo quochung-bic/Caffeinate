@@ -2,9 +2,9 @@ import Foundation
 import Testing
 @testable import CaffeinateKit
 
-/// Cài đặt là dữ liệu của người dùng và sống lâu hơn mọi phiên bản app.
-/// Bộ test này giữ lời hứa: nâng cấp, hạ cấp, hay một file plist bị sửa tay
-/// đều KHÔNG được làm mất cấu hình.
+/// Settings are the user's data and outlive every version of the app.
+/// This suite holds that promise: an upgrade, a downgrade, or a hand-edited
+/// plist must NEVER lose the configuration.
 @Suite("Settings schema")
 struct SettingsSchemaTests {
 
@@ -12,14 +12,14 @@ struct SettingsSchemaTests {
         try JSONDecoder().decode(Settings.self, from: Data(json.utf8))
     }
 
-    @Test("thiếu khoá thì lấy mặc định cho riêng khoá đó, không vứt cả bộ")
+    @Test("a missing key falls back for that key alone, not for the whole set")
     func missingKeysFallBackIndividually() throws {
-        // Đây chính là hình dạng dữ liệu do một bản app CŨ ghi ra: chưa có
-        // externalDisplayTriggerEnabled, chưa có activateOnLaunch. Codable
-        // sinh tự động sẽ ném lỗi ở đây, và store bắt lỗi bằng cách trả về
-        // Settings() — tức là xoá sạch cấu hình của người dùng.
-        // `AssertionFlags` mã hoá qua RawRepresentable nên trên đĩa nó là một
-        // số nguyên trần, không phải object bọc rawValue.
+        // This is exactly the shape an OLD build would have written: no
+        // externalDisplayTriggerEnabled, no activateOnLaunch. The synthesized
+        // Codable would throw here, and the store catches that by returning
+        // Settings() — which wipes the user's configuration.
+        // `AssertionFlags` encodes through RawRepresentable, so on disk it is a
+        // bare integer rather than an object wrapping rawValue.
         let settings = try decode(#"{"flags":3,"customDurationMinutes":90}"#)
 
         #expect(settings.flags == [.system, .display])
@@ -28,25 +28,25 @@ struct SettingsSchemaTests {
         #expect(settings.activateOnLaunch == false)
     }
 
-    @Test("JSON rỗng vẫn cho ra bộ mặc định hợp lệ")
+    @Test("empty JSON still decodes to a valid default set")
     func emptyObjectDecodes() throws {
         #expect(try decode("{}") == Settings())
     }
 
-    @Test("khoá lạ từ bản app mới hơn bị bỏ qua, không làm hỏng phần đọc được")
+    @Test("unknown keys from a newer build are ignored without breaking the rest")
     func unknownKeysAreIgnored() throws {
         let settings = try decode(#"{"customDurationMinutes":60,"quantumFoamMode":true}"#)
         #expect(settings.customDurationMinutes == 60)
     }
 
-    @Test("thời lượng ngoài khoảng bị kẹp về biên, kể cả khi tới từ file sửa tay")
+    @Test("out-of-range durations are clamped, even from a hand-edited file")
     func durationIsClampedOnDecode() throws {
         #expect(try decode(#"{"customDurationMinutes":100000}"#).customDurationMinutes == 480)
         #expect(try decode(#"{"customDurationMinutes":-7}"#).customDurationMinutes == 1)
         #expect(try decode(#"{"customDurationMinutes":0}"#).customDurationMinutes == 1)
     }
 
-    @Test("bundle ID trùng hoặc rỗng bị loại, thứ tự người dùng thêm được giữ")
+    @Test("duplicate and empty bundle IDs are dropped, preserving the user's order")
     func bundleIDsAreDeduplicatedInOrder() throws {
         let settings = try decode(
             #"{"triggerAppBundleIDs":["b","a","b","","a","c"]}"#
@@ -54,7 +54,7 @@ struct SettingsSchemaTests {
         #expect(settings.triggerAppBundleIDs == ["b", "a", "c"])
     }
 
-    @Test("bản ghi ra luôn kèm số hiệu schema để sau này còn chỗ bám mà migrate")
+    @Test("what is written always carries a schema version for a future migration")
     func encodesSchemaVersion() throws {
         let data = try JSONEncoder().encode(Settings())
         let object = try #require(
@@ -63,7 +63,7 @@ struct SettingsSchemaTests {
         #expect(object["schemaVersion"] as? Int == Settings.currentSchemaVersion)
     }
 
-    @Test("ghi rồi đọc lại là phép đồng nhất")
+    @Test("writing then reading back is the identity")
     func roundTripsThroughJSON() throws {
         var settings = Settings()
         settings.flags = [.system, .disk, .userIdle]
@@ -76,7 +76,7 @@ struct SettingsSchemaTests {
         #expect(try JSONDecoder().decode(Settings.self, from: data) == settings)
     }
 
-    @Test("store cũng chuẩn hoá lúc GHI, không chỉ lúc đọc")
+    @Test("the store normalizes on WRITE too, not only on read")
     func storeNormalizesOnWrite() throws {
         let suiteName = "test.caffeinate.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

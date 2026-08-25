@@ -6,7 +6,7 @@ import Testing
 @MainActor
 struct MenuBarIconTests {
 
-    @Test("icon luôn là template image để thích ứng sáng/tối")
+    @Test("the icon is always a template image so it adapts to light and dark")
     func isTemplateImage() {
         let image = MenuBarIcon.image(for: MenuBarIconState(
             isActive: true, progress: 0.5, hasError: false
@@ -14,7 +14,7 @@ struct MenuBarIconTests {
         #expect(image.isTemplate)
     }
 
-    @Test("icon đúng kích thước menu bar")
+    @Test("the icon is the right size for the menu bar")
     func hasMenuBarSize() {
         let image = MenuBarIcon.image(for: MenuBarIconState(
             isActive: false, progress: nil, hasError: false
@@ -22,10 +22,10 @@ struct MenuBarIconTests {
         #expect(image.size == NSSize(width: 18, height: 18))
     }
 
-    @Test("mô tả trợ năng do người gọi truyền vào, không do package tự đặt")
+    @Test("the accessibility description comes from the caller, not from the package")
     func accessibilityDescriptionComesFromCaller() {
-        // Package không được chứa chuỗi giao diện: nó không biết người dùng
-        // đang dùng ngôn ngữ nào. Tầng app tra String Catalog rồi đưa xuống.
+        // The package must contain no display strings: wording belongs to the
+        // app layer, which passes it down.
         let image = MenuBarIcon.image(
             for: .init(isActive: true, progress: nil, hasError: false),
             accessibilityDescription: "any caller string"
@@ -33,7 +33,7 @@ struct MenuBarIconTests {
         #expect(image.accessibilityDescription == "any caller string")
     }
 
-    @Test("trạng thái lỗi vẫn nhận được mô tả trợ năng của người gọi")
+    @Test("the error state still carries the caller's accessibility description")
     func errorStateKeepsCallerDescription() {
         let image = MenuBarIcon.image(
             for: .init(isActive: true, progress: 0.5, hasError: true),
@@ -43,7 +43,7 @@ struct MenuBarIconTests {
         #expect(image.isTemplate)
     }
 
-    @Test("trạng thái khác nhau cho ra hình khác nhau")
+    @Test("different states render to different images")
     func distinctStatesRenderDifferently() throws {
         let off = try #require(MenuBarIcon.image(for:
             .init(isActive: false, progress: nil, hasError: false)).tiffRepresentation)
@@ -59,7 +59,7 @@ struct MenuBarIconTests {
         #expect(on != quarter)
     }
 
-    @Test("progress ngoài khoảng 0...1 bị kẹp lại thay vì vẽ sai")
+    @Test("progress outside 0...1 is clamped rather than drawn wrong")
     func clampsOutOfRangeProgress() throws {
         #expect(MenuBarIconState(isActive: true, progress: 1.8, hasError: false).progress == 1.0)
         #expect(MenuBarIconState(isActive: true, progress: -0.5, hasError: false).progress == 0.0)
@@ -71,23 +71,24 @@ struct MenuBarIconTests {
         #expect(over == full)
     }
 
-    // MARK: - Lượng tử hoá & cache
+    // MARK: - Quantization and cache
 
-    @Test("progress được làm tròn về bậc, nên hai giá trị sát nhau là MỘT trạng thái")
+    @Test("progress is rounded to a step, so two nearby values are ONE state")
     func quantizesProgressIntoSteps() {
-        // 1/32 = 0.03125. Hai giá trị cách nhau chưa tới nửa bậc phải gộp lại,
-        // nếu không cache sẽ trượt mỗi giây và mất sạch tác dụng.
+        // 1/32 = 0.03125. Two values less than half a step apart have to
+        // collapse together, otherwise the cache would miss every second and
+        // lose all its value.
         let a = MenuBarIconState(isActive: true, progress: 0.500, hasError: false)
         let b = MenuBarIconState(isActive: true, progress: 0.505, hasError: false)
         #expect(a == b)
         #expect(a.progress == 0.5)
 
-        // Còn cách nhau trọn một bậc thì vẫn phải phân biệt được.
+        // A full step apart must still be distinguishable.
         let c = MenuBarIconState(isActive: true, progress: 0.5 + 1 / 32.0, hasError: false)
         #expect(a != c)
     }
 
-    @Test("cùng một trạng thái trả về đúng một đối tượng ảnh, không dựng lại")
+    @Test("the same state returns one identical image object, never rebuilt")
     func cacheReturnsIdenticalInstance() {
         let state = MenuBarIconState(isActive: true, progress: 0.25, hasError: false)
         let first = MenuBarIcon.cachedImage(for: state, accessibilityDescription: "a")
@@ -95,17 +96,17 @@ struct MenuBarIconTests {
         #expect(first === second)
     }
 
-    @Test("cache dùng lại ảnh nhưng mô tả trợ năng vẫn cập nhật theo từng giây")
+    @Test("the cache reuses the image but still refreshes the accessibility description")
     func cacheStillRefreshesAccessibilityDescription() {
-        // Hình không đổi khi còn 12 phút hay 11 phút, nhưng câu đọc cho
-        // VoiceOver thì đổi — nên mô tả không được nằm trong khoá cache.
+        // The image is identical at 12 minutes left and at 11, but what
+        // VoiceOver reads is not — so the description must stay out of the key.
         let state = MenuBarIconState(isActive: true, progress: 0.75, hasError: false)
-        _ = MenuBarIcon.cachedImage(for: state, accessibilityDescription: "còn 12 phút")
-        let again = MenuBarIcon.cachedImage(for: state, accessibilityDescription: "còn 11 phút")
-        #expect(again.accessibilityDescription == "còn 11 phút")
+        _ = MenuBarIcon.cachedImage(for: state, accessibilityDescription: "12 minutes left")
+        let again = MenuBarIcon.cachedImage(for: state, accessibilityDescription: "11 minutes left")
+        #expect(again.accessibilityDescription == "11 minutes left")
     }
 
-    @Test("ảnh trống giữ nguyên kích thước để icon bên cạnh không nhảy khi nhấp nháy")
+    @Test("the blank image keeps its size so neighbouring icons do not jump while flashing")
     func blankImageKeepsSize() {
         let blank = MenuBarIcon.blankImage()
         #expect(blank.size == MenuBarIcon.size)

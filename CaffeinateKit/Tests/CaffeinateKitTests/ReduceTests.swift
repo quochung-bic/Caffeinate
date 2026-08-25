@@ -7,7 +7,7 @@ struct ReduceTests {
 
     private let future = Date(timeIntervalSince1970: 2_000_000_000)
 
-    @Test("trạng thái khởi điểm không hoạt động")
+    @Test("the initial state is inactive")
     func initialStateIsInactive() {
         let state = CaffeineState()
         #expect(!state.isActive)
@@ -15,7 +15,7 @@ struct ReduceTests {
         #expect(state.effectiveFlags == [])
     }
 
-    @Test("bật thủ công thì hoạt động và áp dụng bộ cờ đã cấu hình")
+    @Test("turning on manually activates and applies the configured flags")
     func manualActivates() {
         var state = CaffeineState()
         state.flags = [.system, .disk]
@@ -27,7 +27,7 @@ struct ReduceTests {
         #expect(state.effectiveFlags == [.system, .disk])
     }
 
-    @Test("hết giờ khi vẫn bật thủ công thì vẫn hoạt động")
+    @Test("a timer expiring while manual is on leaves it active")
     func stillActiveAfterTimerExpiresIfManual() {
         var state = CaffeineState()
         state = reduce(state, .toggledManually(true))
@@ -40,23 +40,23 @@ struct ReduceTests {
         #expect(state.activeReason == .manual)
     }
 
-    @Test("chọn không giới hạn khi đang hẹn giờ thì xoá hẳn hẹn giờ")
+    @Test("choosing indefinite during a timer clears that timer for good")
     func manualOnClearsRunningTimer() {
         var state = CaffeineState()
         state = reduce(state, .startedTimer(until: future))
 
         state = reduce(state, .toggledManually(true))
 
-        // Không còn mốc hết hạn nào để UI vẽ vòng đếm ngược.
+        // No end date is left for the UI to draw a countdown from.
         #expect(state.timerEndsAt == nil)
         #expect(state.activeReason == .manual)
 
-        // Và hẹn giờ cũ không sống lại khi tắt thủ công.
+        // And the old timer does not come back to life when manual goes off.
         state = reduce(state, .toggledManually(false))
         #expect(!state.isActive)
     }
 
-    @Test("trigger tắt khi timer còn chạy thì vẫn hoạt động, lý do đổi sang timer")
+    @Test("a trigger clearing while a timer runs stays active, with the timer as the reason")
     func triggerClearedButTimerKeepsItActive() {
         var state = CaffeineState()
         state = reduce(state, .triggerFired(.app("Xcode")))
@@ -70,7 +70,7 @@ struct ReduceTests {
         #expect(state.triggerReasons.isEmpty)
     }
 
-    @Test("tắt thủ công khi trigger vẫn đúng thì KHÔNG tắt")
+    @Test("turning manual off while a trigger still holds does NOT switch off")
     func manualOffDoesNotOverrideActiveTrigger() {
         var state = CaffeineState()
         state = reduce(state, .toggledManually(true))
@@ -83,7 +83,7 @@ struct ReduceTests {
         #expect(state.activeReason == .trigger(.charging))
     }
 
-    @Test("stopAll xoá sạch mọi nguồn kích hoạt kể cả trigger")
+    @Test("stopAll clears every source, automation rules included")
     func stopAllClearsEverything() {
         var state = CaffeineState()
         state = reduce(state, .toggledManually(true))
@@ -98,7 +98,7 @@ struct ReduceTests {
         #expect(state.timerEndsAt == nil)
     }
 
-    @Test("nhiều trigger cùng lúc, tắt một cái thì vẫn hoạt động")
+    @Test("with several triggers at once, clearing one leaves it active")
     func multipleTriggers() {
         var state = CaffeineState()
         state = reduce(state, .triggerFired(.charging))
@@ -110,7 +110,7 @@ struct ReduceTests {
         #expect(state.triggerReasons == [.externalDisplay])
     }
 
-    @Test("đổi cờ lúc đang hoạt động thì effectiveFlags đổi theo, vẫn hoạt động")
+    @Test("changing flags while active updates effectiveFlags and stays active")
     func flagsChangeWhileActive() {
         var state = CaffeineState()
         state = reduce(state, .toggledManually(true))
@@ -121,7 +121,7 @@ struct ReduceTests {
         #expect(state.effectiveFlags == [.system, .display, .userIdle])
     }
 
-    @Test("đổi cờ lúc không hoạt động thì effectiveFlags vẫn rỗng")
+    @Test("changing flags while inactive leaves effectiveFlags empty")
     func flagsChangeWhileInactive() {
         var state = CaffeineState()
 
@@ -132,7 +132,7 @@ struct ReduceTests {
         #expect(state.effectiveFlags == [])
     }
 
-    @Test("ưu tiên lý do: thủ công trên timer, timer trên trigger")
+    @Test("reason precedence: manual over timer, timer over trigger")
     func reasonPriority() {
         var state = CaffeineState()
         state = reduce(state, .triggerFired(.charging))
@@ -143,34 +143,34 @@ struct ReduceTests {
         #expect(state.activeReason == .manual)
     }
 
-    @Test("isActive luôn khớp với activeReason != nil")
+    @Test("isActive always agrees with activeReason != nil")
     func isActiveMatchesActiveReason() {
-        // Test 1: trạng thái rỗng — không hoạt động
+        // 1: empty state — inactive.
         var state = CaffeineState()
         #expect(state.isActive == (state.activeReason != nil))
 
-        // Test 2: chỉ bật thủ công
+        // 2: manual only.
         state = reduce(state, .toggledManually(true))
         #expect(state.isActive == (state.activeReason != nil))
 
-        // Test 3: chỉ timer
+        // 3: timer only.
         state = CaffeineState()
         state = reduce(state, .startedTimer(until: future))
         #expect(state.isActive == (state.activeReason != nil))
 
-        // Test 4: chỉ trigger
+        // 4: trigger only.
         state = CaffeineState()
         state = reduce(state, .triggerFired(.charging))
         #expect(state.isActive == (state.activeReason != nil))
 
-        // Test 5: tất cả ba cùng lúc
+        // 5: all three at once.
         state = CaffeineState()
         state = reduce(state, .toggledManually(true))
         state = reduce(state, .startedTimer(until: future))
         state = reduce(state, .triggerFired(.externalDisplay))
         #expect(state.isActive == (state.activeReason != nil))
 
-        // Test 6: xoá toàn bộ từ trạng thái đầy đủ
+        // 6: cleared from a fully populated state.
         state = reduce(state, .stopAll)
         #expect(state.isActive == (state.activeReason != nil))
     }

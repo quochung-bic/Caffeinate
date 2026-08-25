@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct TriggerEngineTests {
 
-    @Test("start bật hết trigger con, stop tắt hết")
+    @Test("start starts every child trigger, stop stops them all")
     func startsAndStopsAllTriggers() {
         let a = FakeTrigger()
         let b = FakeTrigger()
@@ -18,7 +18,7 @@ struct TriggerEngineTests {
         #expect(a.stopped && b.stopped)
     }
 
-    @Test("trigger bật thì phát ra triggerFired")
+    @Test("a trigger switching on emits triggerFired")
     func emitsFiredEvent() {
         let trigger = FakeTrigger()
         let engine = TriggerEngine(triggers: [trigger])
@@ -31,7 +31,7 @@ struct TriggerEngineTests {
         #expect(events == [.triggerFired(.app("Xcode"))])
     }
 
-    @Test("trigger tắt thì phát ra triggerCleared")
+    @Test("a trigger switching off emits triggerCleared")
     func emitsClearedEvent() {
         let trigger = FakeTrigger()
         let engine = TriggerEngine(triggers: [trigger])
@@ -45,7 +45,7 @@ struct TriggerEngineTests {
         #expect(events == [.triggerFired(.charging), .triggerCleared(.charging)])
     }
 
-    @Test("nhiều trigger phát độc lập, không gộp nhầm")
+    @Test("several triggers fire independently and are never conflated")
     func multipleTriggersStayIndependent() {
         let apps = FakeTrigger()
         let power = FakeTrigger()
@@ -65,7 +65,7 @@ struct TriggerEngineTests {
         ])
     }
 
-    @Test("sau stop thì không phát sự kiện nữa")
+    @Test("after stop, nothing is emitted any more")
     func silentAfterStop() {
         let trigger = FakeTrigger()
         let engine = TriggerEngine(triggers: [trigger])

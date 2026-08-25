@@ -1,7 +1,7 @@
 import Foundation
 @testable import CaffeinateKit
 
-/// Ghi lại chuỗi lệnh gửi tới IOKit để test kiểm chứng.
+/// Records the sequence of commands sent to IOKit so tests can assert on it.
 final class FakeBacking: PowerAssertionBacking, @unchecked Sendable {
     enum Call: Equatable {
         case create(AssertionFlags)
@@ -13,10 +13,10 @@ final class FakeBacking: PowerAssertionBacking, @unchecked Sendable {
     private var nextID: UInt32 = 1
     private var idToFlag: [UInt32: AssertionFlags] = [:]
 
-    /// Cờ nào sẽ khiến create ném lỗi.
+    /// Which flags make create throw.
     var failingFlags: AssertionFlags = []
 
-    /// ID nào sẽ khiến release ném lỗi.
+    /// Which IDs make release throw.
     var failingReleaseIDs: Set<UInt32> = []
 
     var calls: [Call] {
@@ -55,23 +55,22 @@ final class FakeTrigger: Trigger {
     private(set) var started = false
     private(set) var stopped = false
 
-    /// Trạng thái active gần nhất đã báo cho mỗi lý do — mô phỏng baseline
-    /// nội bộ của trigger thật (`PowerSourceTrigger.isCharging`,
-    /// `ExternalDisplayTrigger.hasExternal`, dictionary `reported` của
-    /// `AppRunningTrigger`).
+    /// The last active state reported for each reason — modelling the internal
+    /// baseline of a real trigger (`PowerSourceTrigger.isCharging`,
+    /// `ExternalDisplayTrigger.hasExternal`, `AppRunningTrigger`'s `reported`
+    /// dictionary).
     private var lastReported: [TriggerReason: Bool] = [:]
 
     func start() { started = true }
     func stop() { stopped = true }
 
-    /// Giả lập trigger đổi trạng thái. Chỉ gọi `onChange` khi trạng thái
-    /// THỰC SỰ đổi so với lần báo trước cho cùng lý do — giống hệt guard
-    /// "chỉ báo khi thực sự đổi" mà mọi trigger thật đều có (xem
-    /// `PowerSourceTrigger.refresh()`, `ExternalDisplayTrigger.refresh()`,
-    /// diff dictionary trong `AppRunningTrigger.refresh()`). Gọi lại
-    /// `fire(reason, active: true)` hai lần liên tiếp không tạo ra sự kiện
-    /// thứ hai — phải có một `active: false` chen giữa để mô phỏng chuyển
-    /// tiếp thật.
+    /// Simulate the trigger changing state. Calls `onChange` only when the
+    /// state ACTUALLY differs from the last report for that reason — the same
+    /// "report only on a real change" guard every real trigger has (see
+    /// `PowerSourceTrigger.refresh()`, `ExternalDisplayTrigger.refresh()`, and
+    /// the dictionary diff in `AppRunningTrigger.refresh()`). Calling
+    /// `fire(reason, active: true)` twice in a row produces no second event —
+    /// an `active: false` has to come in between to model a real transition.
     func fire(_ reason: TriggerReason, active: Bool) {
         guard lastReported[reason] != active else { return }
         lastReported[reason] = active
@@ -79,8 +78,8 @@ final class FakeTrigger: Trigger {
     }
 }
 
-/// SettingsStoring trong bộ nhớ — không chạm UserDefaults, để test cô lập
-/// và không rò rỉ trạng thái giữa các lần chạy.
+/// An in-memory SettingsStoring — never touches UserDefaults, so tests stay
+/// isolated and leak no state between runs.
 final class InMemorySettingsStore: SettingsStoring {
     var settings: Settings
 

@@ -9,7 +9,7 @@ struct AssertionManagerTests {
         return (AssertionManager(backing: backing, reason: "Test"), backing)
     }
 
-    @Test("bật từ rỗng thì tạo đúng các assertion được yêu cầu")
+    @Test("turning on from empty creates exactly the assertions requested")
     func createsRequestedAssertions() throws {
         let (manager, backing) = makeManager()
 
@@ -19,20 +19,20 @@ struct AssertionManagerTests {
         #expect(manager.heldFlags == [.system, .display])
     }
 
-    @Test("đổi cờ lúc đang giữ thì chỉ tạo/huỷ phần chênh lệch")
+    @Test("changing flags while held applies only the difference")
     func onlyAppliesDelta() throws {
         let (manager, backing) = makeManager()
         try manager.set(flags: [.system, .display])
         backing.reset()
 
-        // Bỏ .display, thêm .disk. .system phải được giữ nguyên, không đụng tới.
+        // Drop .display, add .disk. .system must be left completely alone.
         try manager.set(flags: [.system, .disk])
 
         #expect(backing.calls == [.create(.disk), .release(2)])
         #expect(manager.heldFlags == [.system, .disk])
     }
 
-    @Test("gọi lại với cùng bộ cờ thì không sinh lệnh nào")
+    @Test("setting the same flags again issues no commands")
     func idempotent() throws {
         let (manager, backing) = makeManager()
         try manager.set(flags: [.system, .disk])
@@ -44,7 +44,7 @@ struct AssertionManagerTests {
         #expect(manager.heldFlags == [.system, .disk])
     }
 
-    @Test("đặt về rỗng thì giải phóng hết")
+    @Test("setting an empty set releases everything")
     func releasesAll() throws {
         let (manager, backing) = makeManager()
         try manager.set(flags: [.system, .display])
@@ -56,7 +56,7 @@ struct AssertionManagerTests {
         #expect(manager.heldFlags == [])
     }
 
-    @Test("create thất bại thì giải phóng sạch và ném lỗi, không để lại trạng thái nửa vời")
+    @Test("a failed create rolls back completely and rethrows, leaving nothing half-held")
     func rollsBackOnFailure() throws {
         let (manager, backing) = makeManager()
         backing.failingFlags = [.disk]
@@ -65,18 +65,19 @@ struct AssertionManagerTests {
             try manager.set(flags: [.system, .display, .disk])
         }
 
-        // .system và .display đã tạo (id 1, 2) phải được huỷ lại.
+        // .system and .display were created (ids 1 and 2) and must be released
+        // again. No flag stays held.
         #expect(backing.calls == [
             .create(.system), .create(.display), .release(1), .release(2),
         ])
         #expect(manager.heldFlags == [])
     }
 
-    @Test("release thất bại trong set(flags:) thì ghi lại lỗi, vẫn bỏ cờ khỏi heldFlags, và không ném")
+    @Test("a failed release inside set(flags:) is recorded, still drops the flag, and does not throw")
     func recordsReleaseFailureDuringSet() throws {
         let (manager, backing) = makeManager()
         try manager.set(flags: [.system, .display])
-        backing.failingReleaseIDs = [2] // id của .display
+        backing.failingReleaseIDs = [2] // id of .display
 
         try manager.set(flags: [.system])
 
@@ -84,11 +85,11 @@ struct AssertionManagerTests {
         #expect(manager.lastReleaseError?.flag == .display)
     }
 
-    @Test("release thất bại trong releaseAll() thì ghi lại lỗi")
+    @Test("a failed release inside releaseAll() is recorded")
     func recordsReleaseFailureDuringReleaseAll() throws {
         let (manager, backing) = makeManager()
         try manager.set(flags: [.system, .display])
-        backing.failingReleaseIDs = [1] // id của .system
+        backing.failingReleaseIDs = [1] // id of .system
 
         manager.releaseAll()
 
@@ -96,15 +97,15 @@ struct AssertionManagerTests {
         #expect(manager.lastReleaseError?.flag == .system)
     }
 
-    @Test("một lượt giải phóng thành công hoàn toàn sau đó thì xoá lỗi cũ")
+    @Test("a later fully successful release pass clears the recorded error")
     func clearsReleaseErrorAfterSuccessfulCycle() throws {
         let (manager, backing) = makeManager()
         try manager.set(flags: [.system, .display])
-        backing.failingReleaseIDs = [2] // id của .display
+        backing.failingReleaseIDs = [2] // id of .display
         try manager.set(flags: [.system])
         #expect(manager.lastReleaseError != nil)
 
-        // Lượt sau, release .system thành công hoàn toàn -> lỗi cũ phải biến mất.
+        // Next pass releases .system cleanly, so the old error must disappear.
         backing.failingReleaseIDs = []
         try manager.set(flags: [])
 
@@ -112,19 +113,19 @@ struct AssertionManagerTests {
         #expect(manager.heldFlags == [])
     }
 
-    @Test("set(flags:) chỉ tạo (không release) thì không xoá lỗi release cũ")
+    @Test("a create-only set(flags:) leaves an earlier release error standing")
     func doesNotClearErrorOnCreateOnlyOperation() throws {
         let (manager, backing) = makeManager()
-        // Bước 1: tạo một số cờ
+        // Step 1: hold some flags.
         try manager.set(flags: [.system, .display])
 
-        // Bước 2: gây lỗi release để đặt lastReleaseError
-        backing.failingReleaseIDs = [2] // id của .display
+        // Step 2: force a release failure so lastReleaseError is set.
+        backing.failingReleaseIDs = [2] // id of .display
         try manager.set(flags: [.system])
         #expect(manager.lastReleaseError != nil)
 
-        // Bước 3: chỉ tạo cờ mới, không release cờ nào
-        // lastReleaseError phải vẫn tồn tại (không được xoá)
+        // Step 3: only create a new flag, releasing nothing.
+        // lastReleaseError must survive — nothing has disproved it.
         backing.failingReleaseIDs = []
         try manager.set(flags: [.system, .disk])
 

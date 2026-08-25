@@ -11,7 +11,7 @@ struct SettingsStoreTests {
         return (UserDefaultsSettingsStore(defaults: defaults), defaults, suiteName)
     }
 
-    @Test("store rỗng trả về giá trị mặc định an toàn")
+    @Test("an empty store returns safe defaults")
     func returnsDefaultsWhenEmpty() {
         let (store, defaults, suiteName) = makeStore()
 
@@ -21,11 +21,11 @@ struct SettingsStoreTests {
         #expect(store.settings.triggerAppBundleIDs.isEmpty)
         #expect(store.settings.activateOnLaunch == false)
 
-        // Cleanup: remove persistent domain to avoid accumulating orphaned preferences
+        // Remove the persistent domain so orphaned preferences do not pile up.
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    @Test("ghi rồi đọc lại giữ nguyên giá trị")
+    @Test("writing then reading back preserves the values")
     func roundTrips() {
         let (store, defaults, suiteName) = makeStore()
 
@@ -37,27 +37,26 @@ struct SettingsStoreTests {
         settings.activateOnLaunch = true
         store.settings = settings
 
-        // Flush to disk to ensure data reaches the persistent backing store
+        // Flush to disk so the data reaches the persistent backing store.
         defaults.synchronize()
 
-        // Đọc bằng instance mới trên cùng suite name để chắc chắn đã ghi xuống đĩa.
-        // Tạo UserDefaults object tập tươi để loại trừ in-memory cache của object cũ.
+        // Read through a new instance on the same suite to prove it really was
+        // written. A fresh UserDefaults object rules out the old one's
+        // in-memory cache.
         let freshDefaults = UserDefaults(suiteName: suiteName)!
         let reloaded = UserDefaultsSettingsStore(defaults: freshDefaults)
         #expect(reloaded.settings == settings)
 
-        // Cleanup: remove persistent domain to avoid accumulating orphaned preferences
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    @Test("dữ liệu hỏng thì rơi về mặc định thay vì crash")
+    @Test("corrupt data falls back to defaults instead of crashing")
     func corruptDataFallsBackToDefaults() {
         let (store, defaults, suiteName) = makeStore()
-        defaults.set(Data("không phải json".utf8), forKey: "settings")
+        defaults.set(Data("not json".utf8), forKey: "settings")
 
         #expect(store.settings == Settings())
 
-        // Cleanup: remove persistent domain to avoid accumulating orphaned preferences
         defaults.removePersistentDomain(forName: suiteName)
     }
 }

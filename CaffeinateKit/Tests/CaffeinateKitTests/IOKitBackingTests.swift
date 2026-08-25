@@ -5,7 +5,7 @@ import Testing
 @Suite("IOKitBacking", .serialized)
 struct IOKitBackingTests {
 
-    @Test("tạo rồi giải phóng được cả bốn loại assertion thật")
+    @Test("creates and releases all four real assertion types")
     func createAndReleaseEachFlag() throws {
         let backing = IOKitBacking()
 
@@ -16,7 +16,7 @@ struct IOKitBackingTests {
         }
     }
 
-    @Test("assertion đã tạo hiện ra trong pmset")
+    @Test("a created assertion shows up in pmset")
     func assertionIsVisibleToSystem() throws {
         let backing = IOKitBacking()
         let id = try backing.create(.display, reason: "CaffeinateKitProbe")
@@ -27,11 +27,12 @@ struct IOKitBackingTests {
         #expect(output.contains("CaffeinateKitProbe"))
     }
 
-    /// Bài test trên dùng chuỗi ASCII tự chế nên KHÔNG bắt được lỗi thật: bản
-    /// phát hành từng đặt tên assertion bằng tiếng Việt có dấu, IOKit nhận
-    /// không báo lỗi nhưng pmset in ra `named: ""` — người dùng không còn cách
-    /// nào nhận ra assertion nào là của app. Phải kiểm chính chuỗi dùng thật.
-    @Test("tên assertion dùng thật đọc được trong pmset, không rỗng")
+    /// The test above uses a made-up ASCII string, so it would NOT have caught
+    /// the real bug: a shipped build once named the assertion with accented
+    /// text, which IOKit accepted without complaint while `pmset` printed
+    /// `named: ""` — leaving the user no way to tell which assertion was the
+    /// app's. The string actually used in production has to be checked itself.
+    @Test("the production assertion name is readable in pmset and not empty")
     func productionReasonIsVisibleToSystem() throws {
         let backing = IOKitBacking()
         let id = try backing.create(.display, reason: AssertionManager.defaultReason)

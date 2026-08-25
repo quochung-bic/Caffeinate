@@ -2,12 +2,14 @@ import Foundation
 import Testing
 @testable import CaffeinateKit
 
-/// Dựng bộ trigger giả theo đúng luật production (app/charging/external theo
-/// settings) nhưng bằng `FakeTrigger`, và giữ tham chiếu tới trigger MỚI NHẤT
-/// của mỗi loại — vì `rebuildTriggers()` tạo trigger mới mỗi lần settings đổi,
-/// giống hệt cách production luôn tạo `AppRunningTrigger`/`PowerSourceTrigger`/
-/// `ExternalDisplayTrigger` mới. Đây là seam duy nhất cần thêm để
-/// `CaffeineController` kiểm thử được mà không chạm IOKit/NSWorkspace/NSScreen.
+/// Builds a trigger set following the production rules (app / charging /
+/// external display, according to settings) but out of `FakeTrigger`s, and
+/// keeps a reference to the MOST RECENT trigger of each kind — because
+/// `rebuildTriggers()` creates new triggers every time settings change, exactly
+/// as production always creates fresh `AppRunningTrigger` /
+/// `PowerSourceTrigger` / `ExternalDisplayTrigger` instances. This is the only
+/// seam needed to make `CaffeineController` testable without touching IOKit,
+/// NSWorkspace or NSScreen.
 @MainActor
 private final class TriggerSpy {
     private(set) var appTrigger: FakeTrigger?
@@ -62,9 +64,9 @@ struct CaffeineControllerTests {
         )
     }
 
-    // MARK: - a) Reconfigure drains stale trigger reason (kịch bản fba522a)
+    // MARK: - a) Reconfiguring drains a stale trigger reason (the fba522a case)
 
-    @Test("tắt app-trigger trong settings thì rút lý do app khỏi state, giữ nguyên charging, app vẫn active")
+    @Test("disabling the app trigger drains its reason, keeps charging, and stays active")
     func reconfigureDrainsStaleTriggerReason() {
         var settings = Settings()
         settings.appTriggerEnabled = true
@@ -74,38 +76,39 @@ struct CaffeineControllerTests {
         let spy = TriggerSpy()
         let controller = makeController(settings: settings, spy: spy)
 
-        spy.appTrigger?.fire(.app("Ứng dụng mẫu"), active: true)
+        spy.appTrigger?.fire(.app("Example App"), active: true)
         spy.chargingTrigger?.fire(.charging, active: true)
 
-        #expect(controller.state.triggerReasons == [.app("Ứng dụng mẫu"), .charging])
+        #expect(controller.state.triggerReasons == [.app("Example App"), .charging])
         #expect(controller.state.isActive)
 
-        // Tắt app-trigger trong settings -> rebuildTriggers() chạy. Bộ trigger
-        // cũ (cả app lẫn charging) bị dừng và MỌI lý do cũ bị xoá sạch trước,
-        // không phân biệt lý do nào còn hợp lệ dưới cấu hình mới — đây chính
-        // là điểm kịch bản fba522a từng hỏng (lý do app bị bỏ sót, kẹt lại
-        // vĩnh viễn vì trước đó chỉ xoá khi bộ trigger mới rỗng).
+        // Disabling the app trigger in settings runs rebuildTriggers(). The old
+        // trigger set (both app and charging) is stopped and EVERY old reason is
+        // drained first, regardless of which ones remain valid under the new
+        // configuration — this is precisely where the fba522a case used to
+        // break: the app reason was skipped and stranded forever, because
+        // draining only happened when the new trigger set was empty.
         controller.settings.appTriggerEnabled = false
 
-        // App-trigger không còn trong bộ trigger mới nên .app(...) bị rút
-        // hẳn, không bao giờ quay lại.
-        #expect(!controller.state.triggerReasons.contains(.app("Ứng dụng mẫu")))
+        // The app trigger is gone from the new set, so .app(...) is withdrawn
+        // for good.
+        #expect(!controller.state.triggerReasons.contains(.app("Example App")))
         #expect(spy.appTrigger == nil)
 
-        // Charging-trigger MỚI được tạo lại (settings vẫn bật nó). Trong
-        // production, TriggerEngine.start() gọi refresh() ngay lập tức và
-        // trigger thật (PowerSourceTrigger) sẽ tự phát lại .triggerFired nếu
-        // điều kiện vẫn đúng — FakeTrigger không tự làm việc này nên ta mô
-        // phỏng đúng bằng một lần fire thủ công đại diện cho refresh() đó.
+        // A NEW charging trigger is created (settings still enable it). In
+        // production, TriggerEngine.start() calls refresh() immediately and the
+        // real trigger (PowerSourceTrigger) re-emits .triggerFired if the
+        // condition still holds — FakeTrigger does not do that by itself, so we
+        // model that refresh() with one explicit fire.
         spy.chargingTrigger?.fire(.charging, active: true)
 
         #expect(controller.state.triggerReasons == [.charging])
         #expect(controller.state.isActive)
     }
 
-    // MARK: - b) Create-failure forces inactive + sets lastFailure + releases all
+    // MARK: - b) A failed create forces inactive, sets lastFailure, releases all
 
-    @Test("create thất bại giữa chừng thì buộc về inactive, ghi lastFailure, giải phóng hết cờ đã tạo")
+    @Test("a create failing midway forces inactive, records lastFailure, and releases what it made")
     func createFailureForcesInactiveAndReleasesAll() {
         let backing = FakeBacking()
         backing.failingFlags = [.userIdle]
@@ -119,14 +122,14 @@ struct CaffeineControllerTests {
         #expect(controller.state.isActive == false)
         #expect(controller.state.manual == false)
         #expect(controller.lastFailure != nil)
-        // .display được tạo trước (id 1) rồi .userIdle ném lỗi -> rollback
-        // giải phóng lại .display. Không cờ nào còn bị giữ.
+        // .display is created first (id 1), then .userIdle throws, so the
+        // rollback releases .display again. Nothing stays held.
         #expect(backing.calls == [.create(.display), .release(1)])
     }
 
     // MARK: - c) Timer expiry with manual still on stays active
 
-    @Test("hẹn giờ hết hạn nhưng manual vẫn bật thì vẫn active")
+    @Test("a timer expiring while manual is still on leaves the app active")
     func timerExpiryWithManualStillOnStaysActive() {
         let controller = makeController()
 
@@ -141,11 +144,11 @@ struct CaffeineControllerTests {
         #expect(controller.state.isActive)
     }
 
-    // MARK: - d) I2: Tắt là dứt khoát — không tự bật lại nếu điều kiện không
-    // đổi, nhưng tái diễn (transition) thật thì bật lại. Xem doc comment ở
-    // `CaffeineController.toggle()` cho ngữ nghĩa đầy đủ.
+    // MARK: - d) Stop is decisive — no bounce-back while the condition is
+    // unchanged, but a genuine recurrence does resume. See the doc comment on
+    // `CaffeineController.toggle()` for the full semantics.
 
-    @Test("Tắt xoá lý do trigger dứt khoát: không tự bật lại khi điều kiện không đổi, nhưng tái diễn thật thì bật lại")
+    @Test("Stop clears trigger reasons decisively: no bounce-back unchanged, but a real recurrence resumes")
     func stopIsDecisiveNoBounceBackButRecurrenceResumes() {
         var settings = Settings()
         settings.chargingTriggerEnabled = true
@@ -156,31 +159,31 @@ struct CaffeineControllerTests {
         #expect(controller.state.isActive)
         #expect(controller.state.triggerReasons == [.charging])
 
-        // Tắt dứt khoát: xoá manual + timer + mọi lý do trigger, kể cả lý do
-        // đang đúng vật lý (vẫn cắm sạc).
+        // Stop decisively: clear manual, timer and every trigger reason,
+        // including one that is still physically true (still plugged in).
         controller.toggle()
         #expect(controller.state.isActive == false)
         #expect(controller.state.triggerReasons.isEmpty)
 
-        // "Không đổi": trigger thật (vd PowerSourceTrigger.refresh()) chỉ gọi
-        // onChange khi điều kiện THỰC SỰ đổi (`guard charging != isCharging
-        // else { return }`) — một status tick mà điều kiện y hệt lần trước
-        // sẽ không phát sự kiện nào cả. FakeTrigger giờ mô phỏng đúng guard
-        // đó (xem Fakes.swift): baseline của spy.chargingTrigger vẫn là
-        // `true` từ lần fire đầu (stopAll ở trên không đụng tới nó, đúng như
-        // trigger thật), nên gọi lại fire(.charging, active: true) — cùng
-        // trạng thái, không có active:false chen giữa — bị guard nuốt và
-        // KHÔNG forward tới controller. Đây là assertion thật: nếu guard bị
-        // gỡ (hoặc stopAll ngừng xoá triggerReasons) thì bài test này sẽ
-        // FAIL vì controller sẽ bật lại.
+        // "Unchanged": a real trigger (e.g. PowerSourceTrigger.refresh()) only
+        // calls onChange when the condition ACTUALLY changes (`guard charging
+        // != isCharging else { return }`) — a status tick identical to the last
+        // one emits nothing at all. FakeTrigger models that same guard (see
+        // Fakes.swift): the baseline in spy.chargingTrigger is still `true`
+        // from the first fire (stopAll above never touched it, exactly like the
+        // real trigger), so calling fire(.charging, active: true) again — same
+        // state, with no active:false in between — is swallowed by the guard and
+        // NOT forwarded to the controller. This is a real assertion: remove the
+        // guard (or stop stopAll from clearing triggerReasons) and this test
+        // FAILS, because the controller would switch back on.
         spy.chargingTrigger?.fire(.charging, active: true)
 
         #expect(controller.state.isActive == false)
         #expect(controller.state.triggerReasons.isEmpty)
 
-        // Tái diễn thật (rút sạc rồi cắm lại): trigger thật thấy chuyển tiếp
-        // false→true và gọi onChange lần nữa. Mô phỏng đúng bằng một cặp
-        // active:false rồi active:true.
+        // A genuine recurrence (unplug, then plug back in): the real trigger
+        // sees a false→true transition and calls onChange again. Modelled here
+        // by an active:false followed by an active:true.
         spy.chargingTrigger?.fire(.charging, active: false)
         spy.chargingTrigger?.fire(.charging, active: true)
 
@@ -189,13 +192,13 @@ struct CaffeineControllerTests {
     }
 }
 
-// MARK: - Hẹn giờ và trạng thái icon
+// MARK: - Timers and icon state
 //
-// Phần đếm ngược không kiểm chứng được qua XCUITest (nhịp 1 Hz làm app không
-// bao giờ "đứng yên" theo cách công cụ đó đòi hỏi), nên nó được phủ ở đây —
-// tất định, không cần chờ đồng hồ thật chạy.
+// Countdown behaviour cannot be verified through XCUITest (a 1 Hz tick means
+// the app is never "idle" in the way that tool demands), so it is covered here
+// instead — deterministically, with no need to wait on a real clock.
 
-@Suite("CaffeineController — hẹn giờ")
+@Suite("CaffeineController — timers")
 @MainActor
 struct CaffeineControllerTimerTests {
 
@@ -207,23 +210,23 @@ struct CaffeineControllerTimerTests {
         )
     }
 
-    @Test("bắt đầu hẹn giờ thì đặt mốc kết thúc, bật active và vào chế độ đếm ngược")
-    func startTimerEntersCountdown() {
+    @Test("starting a timer sets the end date, activates, and enters countdown mode")
+    func startTimerEntersCountdown() throws {
         let controller = makeController()
         #expect(controller.isCountingDown == false)
 
         let before = Date()
         controller.startTimer(minutes: 15)
 
-        let endsAt = try? #require(controller.state.timerEndsAt)
+        let endsAt = try #require(controller.state.timerEndsAt)
         #expect(controller.state.isActive)
         #expect(controller.isCountingDown)
         #expect(controller.timerTotalSeconds == 900)
-        // Cho phép sai số nhỏ vì mốc được tính từ Date() bên trong.
-        #expect(abs((endsAt ?? before).timeIntervalSince(before) - 900) < 2)
+        // Allow a small tolerance: the end date is computed from Date() inside.
+        #expect(abs(endsAt.timeIntervalSince(before) - 900) < 2)
     }
 
-    @Test("thời lượng ngoài khoảng bị kẹp — API public không giả định người gọi đã kiểm tra hộ")
+    @Test("out-of-range durations are clamped — public API cannot assume the caller checked")
     func startTimerClampsMinutes() {
         let controller = makeController()
 
@@ -234,7 +237,7 @@ struct CaffeineControllerTimerTests {
         #expect(controller.timerTotalSeconds == TimeInterval(1 * 60))
     }
 
-    @Test("mực cà phê vơi theo thời gian, đầy lúc bắt đầu và cạn lúc hết")
+    @Test("the coffee level drains over time: full at the start, empty at the end")
     func iconProgressDrainsOverTime() throws {
         let controller = makeController()
         controller.startTimer(minutes: 60)
@@ -249,11 +252,11 @@ struct CaffeineControllerTimerTests {
         #expect(abs(half - 0.5) < 0.05)
         #expect(empty == 0.0)
 
-        // Quá hạn thì kẹp ở cạn, không âm.
+        // Past the end it clamps to empty rather than going negative.
         #expect(controller.iconState(at: endsAt.addingTimeInterval(600)).progress == 0.0)
     }
 
-    @Test("bật không giới hạn thì icon không còn mực vơi dần để mà vẽ")
+    @Test("running indefinitely leaves the icon with no level to drain")
     func indefiniteHasNoProgress() {
         let controller = makeController()
         controller.startIndefinite()
@@ -261,11 +264,11 @@ struct CaffeineControllerTimerTests {
         #expect(controller.state.isActive)
         #expect(controller.isCountingDown == false)
         #expect(controller.iconState(at: .now).progress == nil)
-        // Mốc tổng phải được xoá, nếu không lần vẽ sau còn chia cho số cũ.
+        // The total must be cleared, or the next draw still divides by the old one.
         #expect(controller.timerTotalSeconds == 0)
     }
 
-    @Test("chuyển từ hẹn giờ sang không giới hạn thì xoá sạch mốc hẹn giờ cũ")
+    @Test("switching from a timer to indefinite wipes the old end date")
     func indefiniteClearsRunningTimer() {
         let controller = makeController()
         controller.startTimer(minutes: 30)
@@ -278,7 +281,7 @@ struct CaffeineControllerTimerTests {
         #expect(controller.timerTotalSeconds == 0)
     }
 
-    @Test("tắt thì mọi thứ về không: không active, không đếm ngược, không mốc")
+    @Test("stopping resets everything: not active, not counting down, no end date")
     func stopClearsEverything() {
         let controller = makeController()
         controller.startTimer(minutes: 30)
@@ -292,7 +295,7 @@ struct CaffeineControllerTimerTests {
         #expect(controller.iconState(at: .now).isActive == false)
     }
 
-    @Test("trạng thái lỗi được phản ánh vào icon để người dùng thấy ngay trên thanh menu")
+    @Test("a failure surfaces in the icon state so the user sees it on the menu bar")
     func failureShowsInIconState() {
         let backing = FakeBacking()
         backing.failingFlags = [.system]

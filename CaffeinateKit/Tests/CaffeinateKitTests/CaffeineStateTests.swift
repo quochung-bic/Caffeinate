@@ -5,7 +5,7 @@ import Testing
 @Suite("CaffeineState")
 struct CaffeineStateTests {
 
-    @Test("ưu tiên: thủ công thắng hẹn giờ, hẹn giờ thắng luật tự động")
+    @Test("precedence: manual beats timer, timer beats automation rules")
     func activeReasonPriority() {
         var state = CaffeineState()
         state.triggerReasons = [.charging]
@@ -19,11 +19,11 @@ struct CaffeineStateTests {
         #expect(state.activeReason == .manual)
     }
 
-    @Test("nhiều luật cùng đúng thì lý do nói được nhiều nhất hiện trước")
+    @Test("when several rules hold, the most informative reason wins")
     func mostInformativeTriggerWins() {
-        // Thứ tự này KHÔNG được phụ thuộc vào ngôn ngữ giao diện. Trước đây nó
-        // đến từ việc sắp xếp chuỗi tiếng Việt, nghĩa là chuyển app sang tiếng
-        // Anh sẽ lặng lẽ đổi lý do được hiển thị.
+        // This ordering must NOT depend on wording. It used to come from
+        // sorting display strings, which meant the reason shown could change
+        // with the interface language.
         var state = CaffeineState()
         state.triggerReasons = [.charging, .externalDisplay, .app("Xcode")]
         #expect(state.activeReason == .trigger(.app("Xcode")))
@@ -35,18 +35,18 @@ struct CaffeineStateTests {
         #expect(state.activeReason == .trigger(.externalDisplay))
     }
 
-    @Test("nhiều app cùng chạy thì chọn theo tên, ổn định giữa các lần đọc")
+    @Test("with several apps running, the choice is by name and stable across reads")
     func multipleAppsSortStably() {
         var state = CaffeineState()
         state.triggerReasons = [.app("Xcode"), .app("Docker"), .app("Blender")]
-        // Set không có thứ tự; nếu không sắp xếp tường minh thì lý do hiển thị
-        // sẽ nhảy lung tung giữa các lần chạy.
+        // A Set has no order; without sorting explicitly, the reason shown
+        // would jump around between reads.
         for _ in 0..<20 {
             #expect(state.activeReason == .trigger(.app("Blender")))
         }
     }
 
-    @Test("không hoạt động thì không gửi cờ nào xuống IOKit")
+    @Test("while inactive, no flags are sent down to IOKit")
     func effectiveFlagsAreEmptyWhenInactive() {
         var state = CaffeineState()
         state.flags = [.system, .display]

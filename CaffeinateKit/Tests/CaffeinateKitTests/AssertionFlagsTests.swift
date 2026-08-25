@@ -4,12 +4,12 @@ import Testing
 @Suite("AssertionFlags")
 struct AssertionFlagsTests {
 
-    @Test("mặc định chỉ giữ hệ thống, màn hình để macOS tự quyết")
+    @Test("by default holds the system only, leaving the display to macOS")
     func defaultFlags() {
         #expect(AssertionFlags.default == [.system])
     }
 
-    @Test("all liệt kê đúng bốn cờ đơn, không trùng lặp")
+    @Test("all lists exactly the four single flags, with no duplicates")
     func allEnumeratesFourSingleFlags() {
         #expect(AssertionFlags.all.count == 4)
         #expect(Set(AssertionFlags.all.map(\.rawValue)).count == 4)
@@ -18,17 +18,18 @@ struct AssertionFlagsTests {
         }
     }
 
-    @Test("mỗi cờ đơn có mã định danh riêng, tổ hợp thì không có")
+    @Test("every single flag has its own identifier, combinations have none")
     func identifiersAreDistinctForSingleFlags() {
         let ids = AssertionFlags.all.map(\.identifier)
         #expect(ids == ["system", "display", "disk", "userIdle"])
-        // Mã này là khoá tra chuỗi hiển thị ở tầng app và là nhãn trong log,
-        // nên nó phải ổn định; đổi nó là làm hỏng bản dịch lẫn khả năng chẩn đoán.
+        // These identifiers key the display text in the app layer and label log
+        // output, so they have to stay stable; changing one breaks both the
+        // wording and diagnosability.
         #expect(AssertionFlags([.system, .display]).identifier == nil)
         #expect(AssertionFlags([]).identifier == nil)
     }
 
-    @Test("phép trừ tập hợp cho ra phần chênh lệch")
+    @Test("set subtraction yields the difference")
     func setSubtraction() {
         let desired: AssertionFlags = [.system, .display, .disk]
         let held: AssertionFlags = [.system, .userIdle]
