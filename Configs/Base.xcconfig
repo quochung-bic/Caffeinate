@@ -1,35 +1,36 @@
-// Base.xcconfig — cài đặt dùng chung cho MỌI target và MỌI configuration.
+// Base.xcconfig — settings shared by EVERY target and EVERY configuration.
 //
-// Vì sao dùng xcconfig thay vì gõ thẳng vào project.pbxproj: pbxproj là file
-// sinh ra, khó đọc, khó review diff và dễ bị Xcode viết đè. Cài đặt build là
-// mã nguồn — nó phải nằm ở chỗ đọc được, có comment và review được.
+// Why xcconfig rather than typing into project.pbxproj: pbxproj is a generated
+// file, hard to read, hard to review as a diff, and easily overwritten by
+// Xcode. Build settings are source — they belong somewhere readable,
+// commentable and reviewable.
 
-// MARK: - Nền tảng
+// MARK: - Platform
 
-// macOS 14 (Sonoma) là mốc thấp nhất còn hợp lý: đủ mới để dùng @Observable,
-// SMAppService và MenuBarExtra(.window), đủ cũ để mọi máy Intel còn được Apple
-// hỗ trợ đều chạy được.
+// macOS 14 (Sonoma) is the lowest sensible floor: new enough for @Observable,
+// SMAppService and MenuBarExtra(.window), old enough that every Intel Mac Apple
+// still supports can run it.
 MACOSX_DEPLOYMENT_TARGET = 14.0
 SDKROOT = macosx
 
-// Universal binary tường minh. Không dựa vào giá trị mặc định của Xcode:
-// mặc định đổi theo phiên bản Xcode, mà "chạy được trên cả Intel lẫn Apple
-// Silicon" là yêu cầu sản phẩm chứ không phải hệ quả tình cờ.
+// Universal binary, stated explicitly. Not left to Xcode's default: the default
+// changes between Xcode versions, and "runs on both Intel and Apple Silicon" is
+// a product requirement rather than a happy accident.
 ARCHS = $(ARCHS_STANDARD)
 
 // MARK: - Swift
 
 SWIFT_VERSION = 6.0
-// Swift 6 language mode đã bật kiểm tra đồng thời ở mức đầy đủ; khai báo
-// tường minh để nếu có ai hạ SWIFT_VERSION xuống thì cũng không mất kiểm tra.
+// Swift 6 language mode already enables full concurrency checking; stating it
+// explicitly means the checking survives if anyone lowers SWIFT_VERSION.
 SWIFT_STRICT_CONCURRENCY = complete
 SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY = YES
 
-// MARK: - Cảnh báo
+// MARK: - Warnings
 //
-// Bật rộng nhưng KHÔNG bật -Werror: cảnh báo mới xuất hiện theo mỗi bản Xcode,
-// biến chúng thành lỗi nghĩa là một bản Xcode mới có thể làm hỏng build của
-// người khác mà không liên quan gì tới mã của họ.
+// Broad, but deliberately NOT -Werror: new warnings arrive with each Xcode
+// release, and promoting them to errors means a new Xcode can break someone
+// else's build over code they never touched.
 
 CLANG_ENABLE_OBJC_WEAK = YES
 CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES
@@ -61,7 +62,7 @@ GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE
 GCC_WARN_UNUSED_FUNCTION = YES
 GCC_WARN_UNUSED_VARIABLE = YES
 
-// MARK: - Vệ sinh chung
+// MARK: - General hygiene
 
 ALWAYS_SEARCH_USER_PATHS = NO
 ENABLE_STRICT_OBJC_MSGSEND = YES

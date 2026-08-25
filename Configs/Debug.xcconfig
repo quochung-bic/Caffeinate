@@ -1,7 +1,7 @@
 #include "Base.xcconfig"
 
-// Chỉ dựng cho kiến trúc của máy đang ngồi — build nhanh hơn hẳn. Bản Release
-// mới là bản phải universal.
+// Build only for the host architecture — considerably faster. Release is the
+// configuration that has to be universal.
 ONLY_ACTIVE_ARCH = YES
 
 GCC_OPTIMIZATION_LEVEL = 0

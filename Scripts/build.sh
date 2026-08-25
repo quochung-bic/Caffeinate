@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 #
-# build.sh — dựng Caffeinate.app từ dòng lệnh.
+# build.sh — build Caffeinate.app from the command line.
 #
-# Vì sao cần script này thay vì gọi thẳng xcodebuild:
+# Why this exists rather than calling xcodebuild directly:
 #
-#   1. Đường dẫn derived data mặc định của Xcode là một chuỗi băm nằm dưới
-#      ~/Library/Developer/Xcode/DerivedData, khác nhau ở từng bản checkout —
-#      nên câu hỏi "file .app nằm đâu" không có câu trả lời cố định. Script ghim
-#      chỗ đó lại và chép sản phẩm ra một nơi biết trước.
-#   2. Bản Release BẮT BUỘC phải universal, và đây là loại lỗi im lặng: bản chỉ
-#      có arm64 chạy hoàn hảo trên chính máy vừa dựng nó và chết với mọi người
-#      dùng Intel. Phép kiểm ấy phải nằm trong build, không phải nằm trong một
-#      danh sách ai đó phải nhớ.
+#   1. Xcode's default derived data path is a hash under
+#      ~/Library/Developer/Xcode/DerivedData that differs per checkout, so
+#      "where is the .app" has no fixed answer. This script pins that location
+#      and copies the product somewhere predictable.
+#   2. A Release build MUST be universal, and this is a silent class of failure:
+#      an arm64-only build runs perfectly on the machine that produced it and
+#      dies for every Intel user. That check belongs in the build, not on a list
+#      someone has to remember.
 
 set -euo pipefail
 
@@ -29,31 +29,31 @@ quiet=false
 
 usage() {
     cat <<'EOF'
-Cách dùng: Scripts/build.sh [tuỳ chọn]
+Usage: Scripts/build.sh [options]
 
-Dựng Caffeinate.app, và với bản Release thì kiểm luôn rằng nhị phân là universal
-(arm64 + x86_64).
+Builds Caffeinate.app, and for a Release build verifies that the binary really
+is universal (arm64 + x86_64).
 
-Tuỳ chọn:
-  -d, --debug           Cấu hình Debug, chỉ kiến trúc của máy đang ngồi (nhanh hơn)
-  -r, --release         Cấu hình Release, universal binary (mặc định)
-  -t, --test            Chạy toàn bộ test trước khi dựng
-  -T, --test-only       Chỉ chạy test rồi dừng
-  -c, --clean           Xoá derived data trước khi dựng
-  -o, --output DIR      Nơi đặt Caffeinate.app (mặc định: ./build)
-  -q, --quiet           Chỉ hiện cảnh báo, lỗi và kết quả test
-  -h, --help            In trợ giúp này
+Options:
+  -d, --debug           Debug configuration, host architecture only (faster)
+  -r, --release         Release configuration, universal binary (default)
+  -t, --test            Run the full test suite before building
+  -T, --test-only       Run the tests and stop
+  -c, --clean           Delete derived data before building
+  -o, --output DIR      Where to put Caffeinate.app (default: ./build)
+  -q, --quiet           Show only warnings, errors and test results
+  -h, --help            Print this help
 
-Ví dụ:
-  Scripts/build.sh                     # dựng Release vào ./build
-  Scripts/build.sh --debug --clean     # dựng Debug từ đầu
-  Scripts/build.sh --test-only         # 69 unit test + 9 test giao diện
+Examples:
+  Scripts/build.sh                     # Release build into ./build
+  Scripts/build.sh --debug --clean     # a clean Debug build
+  Scripts/build.sh --test-only         # 69 unit tests + 9 UI tests
 EOF
 }
 
 log()  { printf '\033[1m==>\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33mcảnh báo:\033[0m %s\n' "$*" >&2; }
-die()  { printf '\033[1;31mlỗi:\033[0m %s\n' "$*" >&2; exit 1; }
+warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
+die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -62,34 +62,35 @@ while [[ $# -gt 0 ]]; do
         -t|--test)      run_tests=true; shift ;;
         -T|--test-only) run_tests=true; build_app=false; shift ;;
         -c|--clean)     do_clean=true; shift ;;
-        -o|--output)    [[ $# -ge 2 ]] || die "--output cần một thư mục"
+        -o|--output)    [[ $# -ge 2 ]] || die "--output needs a directory"
                         output_dir="$2"; shift 2 ;;
         -q|--quiet)     quiet=true; shift ;;
         -h|--help)      usage; exit 0 ;;
-        *)              usage >&2; die "tuỳ chọn không hiểu: $1" ;;
+        *)              usage >&2; die "unknown option: $1" ;;
     esac
 done
 
-# Kiểm tra trước khi chạy. `xcodebuild` vẫn tồn tại dưới dạng stub khi máy chỉ
-# cài Command Line Tools, và khi đó nó chết muộn kèm một thông báo licence khó
-# hiểu — nên phải xác nhận nó thật sự trỏ vào một bản Xcode đầy đủ.
-command -v xcodebuild >/dev/null 2>&1 || die "không tìm thấy xcodebuild. Cài Xcode 16 trở lên."
+# Check before starting. `xcodebuild` still exists as a stub when only the
+# Command Line Tools are installed, and in that case it fails late with a
+# confusing licence message — so confirm it really points at a full Xcode.
+command -v xcodebuild >/dev/null 2>&1 || die "xcodebuild not found. Install Xcode 16 or newer."
 if ! xcodebuild -version >/dev/null 2>&1; then
-    die "xcodebuild không dùng được. Trỏ nó vào một bản Xcode đầy đủ:
+    die "xcodebuild is not usable. Point it at a full Xcode install:
     sudo xcode-select -s /Applications/Xcode.app"
 fi
 
 xcb() {
     if [[ "${quiet}" == true ]]; then
-        # xcbeautify/xcpretty không phải phụ thuộc của dự án; thay vào đó lọc
-        # thủ công, chỉ giữ chẩn đoán và kết quả. Các mẫu được neo có chủ đích:
-        # chữ "warning" trần cũng xuất hiện trong chính các dòng lệnh biên dịch
-        # mà xcodebuild in ra (-suppress-warnings, --warnings), và như vậy thì
-        # mọi dòng 4 KB đó đều lọt qua.
+        # xcbeautify and xcpretty are not project dependencies; filter by hand
+        # instead, keeping only diagnostics and results. The patterns are
+        # anchored deliberately: the bare word "warning" also appears inside the
+        # compiler command lines xcodebuild echoes (-suppress-warnings,
+        # --warnings), and without anchors every one of those 4 KB lines would
+        # slip through.
         #
-        # `|| true` nằm TRONG ngoặc để việc grep không tìm thấy gì không che mất
-        # mã lỗi của xcodebuild — `set -o pipefail` ở đầu script đưa mã lỗi ấy
-        # ra khỏi pipeline.
+        # `|| true` sits INSIDE the braces so a grep that matches nothing does
+        # not mask xcodebuild's exit status — `set -o pipefail` at the top of
+        # the script surfaces that status out of the pipeline.
         xcodebuild "$@" | { grep -E '(^\*\*|: (error|warning): |^Test Case |^Executed |^Testing (failed|succeeded))' || true; }
         return
     fi
@@ -99,18 +100,18 @@ xcb() {
 cd "${REPO_ROOT}"
 
 if [[ "${do_clean}" == true ]]; then
-    log "Xoá derived data"
+    log "Deleting derived data"
     rm -rf "${DERIVED_DATA}"
     rm -rf "${REPO_ROOT}/CaffeinateKit/.build"
 fi
 
 if [[ "${run_tests}" == true ]]; then
-    # Test của package là tầng nhanh và tất định — chạy trước để một cái lõi
-    # hỏng đỏ trong một giây, thay vì đỏ sau cả một lượt dựng ứng dụng.
-    log "Chạy unit test phần lõi (CaffeinateKit)"
+    # The package tests are the fast, deterministic layer — run them first so a
+    # broken core goes red in a second rather than after a full app build.
+    log "Running the core unit tests (CaffeinateKit)"
     swift test --package-path CaffeinateKit
 
-    log "Chạy test giao diện (chiếm màn hình khoảng một phút)"
+    log "Running the UI tests (takes over the screen for about a minute)"
     xcb -project "${PROJECT}" \
         -scheme "${SCHEME}" \
         -destination 'platform=macOS' \
@@ -119,11 +120,11 @@ if [[ "${run_tests}" == true ]]; then
 fi
 
 if [[ "${build_app}" != true ]]; then
-    log "Test xanh"
+    log "Tests green"
     exit 0
 fi
 
-log "Đang dựng ${SCHEME} (${configuration})"
+log "Building ${SCHEME} (${configuration})"
 xcb -project "${PROJECT}" \
     -scheme "${SCHEME}" \
     -configuration "${configuration}" \
@@ -132,11 +133,11 @@ xcb -project "${PROJECT}" \
     build
 
 built_app="${DERIVED_DATA}/Build/Products/${configuration}/${SCHEME}.app"
-[[ -d "${built_app}" ]] || die "build báo thành công nhưng không thấy ${built_app}"
+[[ -d "${built_app}" ]] || die "the build reported success but ${built_app} is missing"
 
 mkdir -p "${output_dir}"
-# Xoá bundle cũ chứ không chép đè: `cp -R` trộn vào thư mục đang có, nên tài
-# nguyên thừa từ lần dựng trước có thể còn nằm lại.
+# Delete the old bundle rather than copying over it: `cp -R` merges into an
+# existing directory, so leftover resources from a previous build can survive.
 rm -rf "${output_dir:?}/${SCHEME}.app"
 cp -R "${built_app}" "${output_dir}/"
 final_app="${output_dir}/${SCHEME}.app"
@@ -148,32 +149,32 @@ if [[ "${configuration}" == "Release" ]]; then
     for arch in arm64 x86_64; do
         case " ${architectures} " in
             *" ${arch} "*) ;;
-            *) die "bản Release không universal: có '${architectures}', thiếu ${arch}" ;;
+            *) die "the Release build is not universal: got '${architectures}', missing ${arch}" ;;
         esac
     done
 fi
 
-log "Đã dựng ${final_app}"
-printf '    cấu hình   : %s\n' "${configuration}"
-printf '    kiến trúc  : %s\n' "${architectures}"
-printf '    phiên bản  : %s (%s)\n' \
+log "Built ${final_app}"
+printf '    configuration : %s\n' "${configuration}"
+printf '    architectures : %s\n' "${architectures}"
+printf '    version       : %s (%s)\n' \
     "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${final_app}/Contents/Info.plist" 2>/dev/null || echo '?')" \
     "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${final_app}/Contents/Info.plist" 2>/dev/null || echo '?')"
 
 if [[ "${configuration}" == "Debug" ]]; then
-    warn "Bản Debug chỉ có một kiến trúc và không tối ưu. Dùng --release để phát hành."
+    warn "A Debug build is single-architecture and unoptimized. Use --release to ship."
 fi
 
-# Khi install.sh gọi vào đây thì nó lo tiếp phần cài đặt, và in thêm một cách
-# cài thứ hai ngay trước khi nó tự làm việc đó chỉ khiến người đọc phân vân.
+# When install.sh calls in here it handles installation itself, and printing a
+# second way to install right before it does that would only confuse the reader.
 if [[ -z "${CAFFEINATE_INSTALLING:-}" ]]; then
     cat <<EOF
 
-Cài đặt:
-    ./Scripts/install.sh          # dựng lại rồi đặt vào /Applications
-    cp -R "${final_app}" /Applications/    # hoặc chép tay
+Install:
+    ./Scripts/install.sh          # rebuild and place it in /Applications
+    cp -R "${final_app}" /Applications/    # or copy it by hand
 
-Khởi động cùng macOS chỉ hoạt động khi app nằm trong /Applications — đó là yêu
-cầu của SMAppService, không phải một tuỳ chọn.
+Launch at login only works while the app lives in /Applications — that is an
+SMAppService requirement, not a preference.
 EOF
 fi

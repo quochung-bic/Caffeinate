@@ -1,58 +1,62 @@
 #!/usr/bin/env swift
 //
-// GenerateAppIcon.swift — sinh toàn bộ bộ icon ứng dụng từ mã.
+// GenerateAppIcon.swift — generates the whole app icon set from code.
 //
 //     swift Scripts/GenerateAppIcon.swift
 //
-// Vì sao icon là mã nguồn chứ không phải một file PNG chép vào repo: một tấm
-// ảnh nhị phân không nói được vì sao nó trông như vậy, không review được trong
-// diff, và không sửa lại được nếu người vẽ ra nó không còn ở đây. Ở dạng này,
-// đổi màu nền hay độ dày nét là sửa một dòng rồi chạy lại — và mọi kích thước
-// đều được sinh từ cùng một bản vẽ vector nên không bao giờ lệch nhau.
+// Why the icon is source rather than a PNG checked into the repo: a binary
+// image cannot explain why it looks the way it does, cannot be reviewed in a
+// diff, and cannot be revised once whoever drew it has moved on. In this form,
+// changing the background colour or a stroke width is a one-line edit and a
+// re-run — and every size comes from the same vector drawing, so they can never
+// drift apart.
 //
-// Hình khối cố ý ăn khớp với `MenuBarIcon` và `CoffeeCup` trong app: cùng một
-// ly cà phê xuất hiện ở ba nơi (Dock/Finder, thanh menu, panel), và người dùng
-// phải nhận ra ngay đó là cùng một thứ.
+// The shapes deliberately match `MenuBarIcon` and `CoffeeCup` in the app: the
+// same cup of coffee appears in three places (Dock/Finder, menu bar, panel), and
+// the user should recognise it instantly as one thing.
 
 import AppKit
 import CoreGraphics
 import Foundation
 
-// MARK: - Lưới icon macOS
+// MARK: - The macOS icon grid
 
-/// Khung vẽ 1024, thân icon 824 nằm giữa. Đây là lưới Apple quy định cho icon
-/// macOS: phần lề 100pt mỗi bên không phải chỗ thừa mà là chỗ cho bóng đổ và
-/// cho icon đứng đúng tỉ lệ cạnh những icon khác trong Dock. Icon tràn sát mép
-/// sẽ trông to hơn hẳn hàng xóm — đó là lỗi thường gặp nhất khi tự vẽ.
+/// A 1024 canvas with the 824 icon body centred in it. This is Apple's grid for
+/// macOS icons: the 100pt margin on each side is not wasted space but room for
+/// the shadow, and it keeps the icon correctly proportioned next to its
+/// neighbours in the Dock. An icon that runs to the edge looks noticeably larger
+/// than the ones beside it — the single most common mistake in a hand-drawn
+/// icon.
 let canvas: CGFloat = 1024
 let bodyInset: CGFloat = 100
 let bodySize = canvas - bodyInset * 2
 
-// MARK: - Bảng màu
+// MARK: - Palette
 //
-// Nâu ấm, không phải đen. Nền đen trung tính là lựa chọn an toàn tới mức vô
-// hình; màu cà phê thật làm icon nhận ra được từ xa và ăn khớp với chất liệu
-// của chính ứng dụng.
+// Warm brown, not black. A neutral black background is safe to the point of
+// being invisible; real coffee colour makes the icon recognisable from a
+// distance and matches the app's own material.
 
 func srgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> CGColor {
     CGColor(srgbRed: r, green: g, blue: b, alpha: a)
 }
 
-let backgroundTop     = srgb(0.87, 0.62, 0.35)   // caramel bắt sáng
-let backgroundBottom  = srgb(0.37, 0.20, 0.11)   // espresso trong bóng
+let backgroundTop     = srgb(0.87, 0.62, 0.35)   // caramel catching the light
+let backgroundBottom  = srgb(0.37, 0.20, 0.11)   // espresso in shadow
 let porcelainTop      = srgb(0.99, 0.97, 0.93)
 let porcelainBottom   = srgb(0.90, 0.85, 0.78)
 let brewDark          = srgb(0.20, 0.10, 0.05)
 let brewLight         = srgb(0.42, 0.23, 0.12)
 let crema             = srgb(0.76, 0.53, 0.30)
 
-// MARK: - Hình học
+// MARK: - Geometry
 
-/// Squircle (siêu ellipse) chứ không phải rounded rect.
+/// A squircle (superellipse), not a rounded rect.
 ///
-/// Góc bo của icon macOS có độ cong LIÊN TỤC: bán kính đổi dần chứ không nhảy
-/// từ thẳng sang cung tròn. Một `CGPath(roundedRect:)` thường sẽ lệch thấy rõ ở
-/// 512pt trở lên — cạnh icon trông hơi "bụng" so với các icon hệ thống bên cạnh.
+/// macOS icon corners have CONTINUOUS curvature: the radius eases in rather
+/// than jumping from straight to a circular arc. A plain `CGPath(roundedRect:)`
+/// is visibly off at 512pt and above — the edge looks slightly bulged next to
+/// the system icons around it.
 func squirclePath(in rect: CGRect, exponent n: CGFloat = 5) -> CGPath {
     let path = CGMutablePath()
     let a = rect.width / 2
@@ -73,14 +77,15 @@ func squirclePath(in rect: CGRect, exponent n: CGFloat = 5) -> CGPath {
     return path
 }
 
-/// Thân ly, thuôn dần xuống đáy và bo tròn ở đế.
-/// Toạ độ trong hệ 1024, gốc ở góc TRÊN-TRÁI (đảo lại lúc vẽ).
+/// The cup body, tapering toward the base and rounded at the foot.
+/// Coordinates are in the 1024 space with the origin at TOP-LEFT (flipped when
+/// drawing).
 struct Cup {
     static let rimY: CGFloat = 366
     static let baseY: CGFloat = 668
     static let rimHalfWidth: CGFloat = 176
     static let baseHalfWidth: CGFloat = 150
-    static let centerX: CGFloat = 462   // lệch trái để chừa chỗ cho quai
+    static let centerX: CGFloat = 462   // offset left to leave room for the handle
     static let rimEllipseHeight: CGFloat = 62
 
     static func halfWidth(atY y: CGFloat) -> CGFloat {
@@ -88,12 +93,12 @@ struct Cup {
         return rimHalfWidth + (baseHalfWidth - rimHalfWidth) * t
     }
 
-    /// Bao ngoài của ly: hai thành thuôn + đế bo tròn + vành ellipse ở trên.
+    /// The cup's outline: two tapered walls, a rounded foot, an elliptical rim.
     static func bodyPath(flip: (CGPoint) -> CGPoint) -> CGPath {
         let path = CGMutablePath()
         let rimHalf = rimEllipseHeight / 2
 
-        // Nửa trái của vành, đi xuống thành trái.
+        // The left half of the rim, running down the left wall.
         path.move(to: flip(CGPoint(x: centerX - rimHalfWidth, y: rimY)))
         path.addLine(to: flip(CGPoint(x: centerX - baseHalfWidth, y: baseY - 46)))
         path.addCurve(
@@ -102,7 +107,7 @@ struct Cup {
             control2: flip(CGPoint(x: centerX + baseHalfWidth, y: baseY + 62))
         )
         path.addLine(to: flip(CGPoint(x: centerX + rimHalfWidth, y: rimY)))
-        // Vành: nửa cung trên của ellipse, khép kín hình.
+        // The rim: the upper half of the ellipse, closing the shape.
         path.addCurve(
             to: flip(CGPoint(x: centerX - rimHalfWidth, y: rimY)),
             control1: flip(CGPoint(x: centerX + rimHalfWidth, y: rimY - rimHalf * 2.4)),
@@ -112,7 +117,7 @@ struct Cup {
         return path
     }
 
-    /// Quai: một cung dày bám đúng lên thành phải.
+    /// The handle: a thick arc anchored exactly on the right wall.
     static func handlePath(flip: (CGPoint) -> CGPoint) -> CGPath {
         let topY = rimY + 50
         let bottomY = rimY + 208
@@ -126,7 +131,8 @@ struct Cup {
         return path
     }
 
-    /// Mặt cà phê — ellipse nằm gọn trong vành, thụt vào cho thấy độ dày sứ.
+    /// The coffee surface — an ellipse inset within the rim, the inset showing
+    /// the thickness of the ceramic.
     static func brewRect() -> CGRect {
         let inset: CGFloat = 26
         return CGRect(
@@ -138,10 +144,10 @@ struct Cup {
     }
 }
 
-// MARK: - Vẽ
+// MARK: - Drawing
 
 func drawIcon(in context: CGContext) {
-    // CoreGraphics có gốc ở góc dưới-trái; bản vẽ ở trên tính từ trên xuống.
+    // CoreGraphics has its origin at bottom-left; the geometry above is top-down.
     func flip(_ point: CGPoint) -> CGPoint { CGPoint(x: point.x, y: canvas - point.y) }
     func flipRect(_ rect: CGRect) -> CGRect {
         CGRect(x: rect.minX, y: canvas - rect.maxY, width: rect.width, height: rect.height)
@@ -151,8 +157,9 @@ func drawIcon(in context: CGContext) {
     let body = CGRect(x: bodyInset, y: bodyInset, width: bodySize, height: bodySize)
     let shape = squirclePath(in: body)
 
-    // Bóng đổ mềm dưới thân icon. Nhẹ thôi: macOS đã có bóng riêng cho Dock,
-    // chồng thêm một cái đậm nữa là icon trông như dán đè lên nền.
+    // A soft shadow under the icon body. Kept light: macOS already applies its
+    // own Dock shadow, and stacking a heavy one on top makes the icon look
+    // pasted onto the background.
     context.saveGState()
     context.setShadow(offset: CGSize(width: 0, height: -18), blur: 34,
                       color: srgb(0, 0, 0, 0.28))
@@ -161,8 +168,8 @@ func drawIcon(in context: CGContext) {
     context.fillPath()
     context.restoreGState()
 
-    // Nền: gradient dọc + một vệt sáng chếch từ trên-trái, đủ để mặt phẳng có
-    // chiều sâu mà không thành hiệu ứng loè loẹt.
+    // Background: a vertical gradient plus a highlight raking in from the top
+    // left — enough to give the surface depth without tipping into gloss.
     context.saveGState()
     context.addPath(shape)
     context.clip()
@@ -190,8 +197,8 @@ func drawIcon(in context: CGContext) {
     }
     context.restoreGState()
 
-    // Quai vẽ trước thân: hai đầu quai bị thân che đi, nên chỗ nối không lộ ra
-    // một đoạn cụt.
+    // The handle is drawn before the body so the body covers both of its ends
+    // and the joint never shows a blunt stub.
     context.saveGState()
     context.setLineWidth(46)
     context.setLineCap(.round)
@@ -200,7 +207,8 @@ func drawIcon(in context: CGContext) {
     context.strokePath()
     context.restoreGState()
 
-    // Thân ly: gradient sứ để khối có chiều, không phải một mảng trắng phẳng.
+    // The cup body: a ceramic gradient so the form reads as volume rather than
+    // a flat white patch.
     let cupBody = Cup.bodyPath(flip: flip)
     context.saveGState()
     context.setShadow(offset: CGSize(width: 0, height: -10), blur: 26,
@@ -225,8 +233,8 @@ func drawIcon(in context: CGContext) {
     }
     context.restoreGState()
 
-    // Cà phê: ellipse tối dần về phía xa, thêm một vệt crema mảnh ở gần để mặt
-    // thoáng đọc ra là chất lỏng chứ không phải một cái lỗ.
+    // Coffee: an ellipse darkening toward the far edge, with a thin band of
+    // crema nearer the front so the surface reads as liquid rather than a hole.
     let brew = flipRect(Cup.brewRect())
     context.saveGState()
     context.addEllipse(in: brew)
@@ -251,7 +259,7 @@ func drawIcon(in context: CGContext) {
     context.restoreGState()
 }
 
-// MARK: - Xuất file
+// MARK: - Output
 
 func renderPNG(size: Int) -> Data {
     guard let context = CGContext(
@@ -262,21 +270,21 @@ func renderPNG(size: Int) -> Data {
         bytesPerRow: 0,
         space: CGColorSpaceCreateDeviceRGB(),
         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-    ) else { fatalError("Không tạo được CGContext \(size)×\(size)") }
+    ) else { fatalError("Could not create a CGContext at \(size)×\(size)") }
 
     context.interpolationQuality = .high
     context.setAllowsAntialiasing(true)
-    // Luôn vẽ ở hệ toạ độ 1024 rồi thu phóng, thay vì vẽ lại theo từng cỡ:
-    // mọi kích thước là cùng một bản vẽ, không thể lệch nhau.
+    // Always draw in the 1024 space and scale, rather than redrawing per size:
+    // every size is the same drawing and they cannot drift apart.
     let scale = CGFloat(size) / canvas
     context.scaleBy(x: scale, y: scale)
     drawIcon(in: context)
 
-    guard let image = context.makeImage() else { fatalError("Không dựng được ảnh") }
+    guard let image = context.makeImage() else { fatalError("Could not build the image") }
     let rep = NSBitmapImageRep(cgImage: image)
     rep.size = NSSize(width: size, height: size)
     guard let data = rep.representation(using: .png, properties: [:]) else {
-        fatalError("Không mã hoá được PNG")
+        fatalError("Could not encode the PNG")
     }
     return data
 }
@@ -292,8 +300,9 @@ for size in sizes {
     print("✓ icon_\(size).png")
 }
 
-// Contents.json sinh cùng lúc với ảnh: hai thứ này lệch nhau là lỗi im lặng —
-// Xcode chỉ cảnh báo nhẹ rồi dựng ra một bộ icon thiếu cỡ.
+// Contents.json is generated alongside the images: letting the two drift apart
+// is a silent failure — Xcode emits a mild warning and then ships an icon set
+// with sizes missing.
 let entries: [(idiom: String, size: String, scale: String, file: Int)] = [
     ("mac", "16x16", "1x", 16),   ("mac", "16x16", "2x", 32),
     ("mac", "32x32", "1x", 32),   ("mac", "32x32", "2x", 64),

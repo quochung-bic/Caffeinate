@@ -3,18 +3,19 @@
 <plist version="1.0">
 <dict>
 	<!--
-	  Cố ý RỖNG, và cố ý tồn tại.
+	  Deliberately EMPTY, and deliberately present.
 
-	  App Sandbox KHÔNG bật: Caffeinate cần liệt kê tiến trình đang chạy qua
-	  NSWorkspace.runningApplications để luật "app X đang chạy" hoạt động, và
-	  cần đọc icon/tên của app bất kỳ người dùng chọn. Trong sandbox, cả hai
-	  đều bị cắt hoặc phải xin thêm quyền tạm — đổi lấy một tính năng cốt lõi
-	  không phải giao dịch hợp lý cho một tiện ích phân phối ngoài App Store.
+	  App Sandbox is NOT enabled: Caffeinate needs to enumerate running
+	  processes through NSWorkspace.runningApplications for the "app X is
+	  running" rule to work, and needs to read the icon and name of whatever
+	  app the user picks. Under the sandbox both are cut off or require extra
+	  temporary entitlements — a poor trade for a core feature in a utility
+	  distributed outside the App Store.
 
-	  Vì vậy app đi theo con đường Developer ID: hardened runtime + notarize,
-	  không sandbox. File này giữ lại để lựa chọn đó là một quyết định ghi
-	  thành văn bản, không phải một thiếu sót — và để khi cần thêm quyền thì
-	  đã có sẵn chỗ đặt.
+	  So the app takes the Developer ID route: hardened runtime plus
+	  notarization, no sandbox. This file stays so that choice is written down
+	  as a decision rather than looking like an oversight — and so there is
+	  already somewhere to put an entitlement when one is needed.
 	-->
 </dict>
 </plist>

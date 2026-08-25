@@ -1,4 +1,4 @@
-// UITests.xcconfig — target kiểm thử giao diện.
+// UITests.xcconfig — the UI test target.
 
 PRODUCT_BUNDLE_IDENTIFIER = io.github.quochung-bic.Caffeinate.UITests
 PRODUCT_NAME = $(TARGET_NAME)
