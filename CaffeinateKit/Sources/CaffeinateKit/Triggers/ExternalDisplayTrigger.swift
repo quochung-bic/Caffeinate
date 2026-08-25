@@ -1,6 +1,6 @@
 import AppKit
 
-/// Bật khi có từ hai màn hình trở lên.
+/// Fires while two or more displays are attached.
 @MainActor
 public final class ExternalDisplayTrigger: Trigger {
     public var onChange: (@MainActor (TriggerReason, Bool) -> Void)?

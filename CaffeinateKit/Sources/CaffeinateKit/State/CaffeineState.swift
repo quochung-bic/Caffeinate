@@ -1,10 +1,10 @@
 import Foundation
 
-/// Vì sao một luật tự động đang yêu cầu giữ máy thức.
+/// Why an automation rule is asking to keep the Mac awake.
 ///
-/// `.app` mang theo tên hiển thị mà macOS trả về cho ứng dụng đó — đây là dữ
-/// liệu lấy từ hệ thống, không phải chuỗi giao diện do app này viết ra, nên nó
-/// nằm ở đây là đúng chỗ.
+/// `.app` carries the display name macOS reports for that application — data
+/// read from the system rather than interface text written by this app, so it
+/// belongs here.
 public enum TriggerReason: Hashable, Sendable {
     case app(String)
     case charging
@@ -12,12 +12,12 @@ public enum TriggerReason: Hashable, Sendable {
 }
 
 extension TriggerReason: Comparable {
-    /// Thứ tự ưu tiên khi nhiều luật cùng đúng: cái nào NÓI ĐƯỢC NHIỀU NHẤT thì
-    /// hiện trước. "Xcode đang chạy" hữu ích hơn hẳn "đang cắm sạc".
+    /// Precedence when several rules hold at once: whichever SAYS THE MOST wins.
+    /// "Xcode is running" is far more useful than "plugged in".
     ///
-    /// Trước đây thứ tự này lấy từ việc sắp xếp chuỗi tiếng Việt — nghĩa là đổi
-    /// ngôn ngữ giao diện sẽ lặng lẽ đổi luôn lý do nào được hiển thị. Xếp hạng
-    /// tường minh ở đây làm thứ tự độc lập với ngôn ngữ.
+    /// This ordering used to fall out of sorting the display strings, which
+    /// meant the interface language silently decided which reason was shown.
+    /// Ranking explicitly here keeps the order independent of wording.
     private var priority: (Int, String) {
         switch self {
         case .app(let name):    (0, name)
@@ -31,19 +31,19 @@ extension TriggerReason: Comparable {
     }
 }
 
-/// Nguồn kích hoạt đang thắng, dùng để hiển thị "Tự bật do: ...".
+/// The winning source, used to show "On because: …".
 public enum ActiveReason: Equatable, Sendable {
     case manual
     case timer(until: Date)
     case trigger(TriggerReason)
 }
 
-/// Toàn bộ trạng thái của app. Nguồn sự thật duy nhất.
+/// The app's entire state. The single source of truth.
 public struct CaffeineState: Equatable, Sendable {
     public var manual: Bool = false
     public var timerEndsAt: Date? = nil
     public var triggerReasons: Set<TriggerReason> = []
-    /// Bộ cờ người dùng đã cấu hình — áp dụng khi và chỉ khi đang hoạt động.
+    /// The flags the user configured — applied if and only if active.
     public var flags: AssertionFlags = .default
 
     public init() {}
@@ -52,16 +52,16 @@ public struct CaffeineState: Equatable, Sendable {
         activeReason != nil
     }
 
-    /// Bộ cờ thực sự gửi xuống IOKit.
+    /// The flags actually sent down to IOKit.
     public var effectiveFlags: AssertionFlags {
         isActive ? flags : []
     }
 
-    /// Ưu tiên: thủ công > hẹn giờ > luật tự động.
+    /// Precedence: manual > timer > automation rule.
     public var activeReason: ActiveReason? {
         if manual { return .manual }
         if let endsAt = timerEndsAt { return .timer(until: endsAt) }
-        // Sắp xếp để lý do hiển thị ổn định giữa các lần đọc và giữa các ngôn ngữ.
+        // Sorted so the reason shown is stable from one read to the next.
         if let first = triggerReasons.min() { return .trigger(first) }
         return nil
     }

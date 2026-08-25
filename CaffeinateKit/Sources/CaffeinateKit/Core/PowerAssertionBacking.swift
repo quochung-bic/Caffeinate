@@ -1,8 +1,8 @@
-/// Lỗi thô từ IOKit khi tạo hoặc giải phóng một assertion.
+/// A raw IOKit error from creating or releasing an assertion.
 ///
-/// Cố ý KHÔNG có `localizedDescription`: câu chữ hiển thị cho người dùng là
-/// việc của tầng app, nơi có String Catalog. Ở đây chỉ giữ đủ dữ kiện để tầng
-/// đó dựng câu — cờ nào và mã IOReturn bao nhiêu.
+/// Deliberately no `localizedDescription`: wording shown to the user is the app
+/// layer's job. This type carries only the facts that layer needs to build a
+/// sentence — which flag, and which IOReturn code.
 public struct AssertionError: Error, Equatable, Sendable {
     public let flag: AssertionFlags
     public let code: Int32
@@ -13,22 +13,24 @@ public struct AssertionError: Error, Equatable, Sendable {
     }
 }
 
-/// Chuyện gì đã hỏng, và hậu quả của nó khác nhau thế nào.
+/// What went wrong, and how the consequences differ.
 ///
-/// Phân biệt hai ca này là quan trọng chứ không phải trang trí: create hỏng thì
-/// app KHÔNG còn giữ máy thức (đã ép về tắt), release hỏng thì app VẪN đang giữ
-/// đúng những gì người dùng yêu cầu. Người dùng cần đọc ra hai câu khác nhau.
+/// Telling these two apart matters and is not decoration: after a failed
+/// create the app is NOT holding the Mac awake (state was forced off), whereas
+/// after a failed release it IS still holding exactly what the user asked for.
+/// The user needs to read two different sentences.
 public enum AssertionFailure: Error, Equatable, Sendable {
-    /// Không tạo được assertion. Trạng thái đã bị ép về tắt.
+    /// An assertion could not be created. State has been forced off.
     case couldNotHold(AssertionError)
-    /// Không giải phóng được một assertion cũ. Những cờ vừa yêu cầu vẫn hợp lệ.
+    /// An old assertion could not be released. The flags just requested remain valid.
     case couldNotRelease(AssertionError)
-    /// Lỗi không tới từ IOKit. Giữ nguyên mô tả thô để còn lần ra được;
-    /// tầng app bọc nó trong một câu đã dịch chứ không in trần ra.
+    /// An error that did not come from IOKit. The raw description is kept so it
+    /// stays traceable; the app layer wraps it in a sentence rather than
+    /// printing it bare.
     case unexpected(debugDescription: String)
 }
 
-/// Lớp trừu tượng trên IOKit để test không cần đụng hệ thống thật.
+/// Abstraction over IOKit so tests never touch the real system.
 public protocol PowerAssertionBacking: Sendable {
     func create(_ flag: AssertionFlags, reason: String) throws -> UInt32
     func release(_ id: UInt32) throws

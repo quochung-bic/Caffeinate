@@ -1,21 +1,21 @@
 import AppKit
 
-/// Thông tin tối thiểu cần để vẽ icon. Tách khỏi `CaffeineState` để phần vẽ
-/// không phụ thuộc vào toàn bộ mô hình trạng thái.
+/// The minimum needed to draw the icon. Kept separate from `CaffeineState` so
+/// the drawing code does not depend on the whole state model.
 ///
-/// `progress` được LƯỢNG TỬ HOÁ ngay trong init. Icon menu bar cao 18pt, lòng
-/// ly chỉ chừng 8.8pt — ở màn hình 2x là 18 pixel. Mọi thay đổi nhỏ hơn 1/32
-/// đều rơi vào cùng một pixel, nên giữ giá trị liên tục chỉ tạo ra vô số trạng
-/// thái khác nhau trên danh nghĩa mà giống hệt nhau trên màn hình. Lượng tử hoá
-/// biến kiểu này thành khoá cache dùng được, và nhờ đó một lần hẹn giờ 8 tiếng
-/// dựng 32 tấm ảnh thay vì 28.800 tấm.
+/// `progress` is QUANTIZED in the initializer. The menu bar icon is 18pt tall
+/// and the inside of the cup only about 8.8pt — 18 pixels on a 2x display. Any
+/// change smaller than 1/32 lands on the same pixel, so keeping a continuous
+/// value would produce endless states that are nominally distinct and visually
+/// identical. Quantizing turns this type into a usable cache key, which is why
+/// an eight-hour timer builds 32 images instead of 28,800.
 public struct MenuBarIconState: Equatable, Hashable, Sendable {
-    /// Số bậc mực cà phê phân biệt được. Xem giải thích ở trên.
+    /// Distinguishable coffee levels. See the explanation above.
     public static let progressSteps = 32.0
 
     public let isActive: Bool
-    /// Tỉ lệ thời gian còn lại, 0...1, đã kẹp và lượng tử hoá.
-    /// `nil` nghĩa là đang bật không giới hạn.
+    /// Fraction of time remaining, 0...1, clamped and quantized.
+    /// `nil` means on indefinitely.
     public let progress: Double?
     public let hasError: Bool
 
@@ -29,36 +29,38 @@ public struct MenuBarIconState: Equatable, Hashable, Sendable {
     }
 }
 
-/// Vẽ icon menu bar bằng AppKit. Toàn bộ nét vẽ dùng đen + alpha rồi đánh dấu
-/// template — macOS sẽ tự tô lại theo sáng/tối và theo tint của menu bar.
-/// Không bao giờ hard-code màu ở đây.
+/// Draws the menu bar icon with AppKit. Every stroke uses black plus alpha and
+/// the image is marked as a template — macOS recolours it for light and dark
+/// mode and for the menu bar tint. Never hard-code a colour here.
 ///
-/// Không có chuỗi hiển thị nào trong file này: mô tả trợ năng do tầng app
-/// truyền vào, vì chỉ tầng đó mới biết ngôn ngữ người dùng đang dùng.
+/// No display strings live in this file: the accessibility description is
+/// passed in by the app layer, which is the layer that owns wording.
 public enum MenuBarIcon {
 
     public static let size = NSSize(width: 18, height: 18)
 
     // MARK: - Cache
     //
-    // Dựng NSImage nghĩa là cấp một bitmap và chạy lại toàn bộ đường vẽ. Nhãn
-    // menu bar được đánh giá lại mỗi giây trong lúc đếm ngược, nên không cache
-    // là trả cái giá đó 3.600 lần mỗi giờ cho một hình gần như không đổi.
-    // Không gian trạng thái nhỏ (khoảng 70 tổ hợp) nên bảng tra đơn giản là đủ;
-    // ngưỡng bên dưới chỉ để chặn rò rỉ nếu sau này thêm bậc.
+    // Building an NSImage allocates a bitmap and replays the whole drawing
+    // path. The menu bar label is re-evaluated every second during a countdown,
+    // so skipping the cache would pay that cost 3,600 times an hour for a
+    // near-identical image. The state space is small (roughly 70 combinations)
+    // so a plain lookup table is enough; the limit below only guards against a
+    // leak if more steps are added later.
 
     @MainActor private static var cache: [MenuBarIconState: NSImage] = [:]
     @MainActor private static let cacheLimit = 128
 
-    /// Bản có cache — dùng cho đường chạy thật.
+    /// Cached variant — used on the real path.
     @MainActor
     public static func cachedImage(
         for state: MenuBarIconState,
         accessibilityDescription: String
     ) -> NSImage {
         if let hit = cache[state] {
-            // Mô tả trợ năng đổi theo từng giây (còn 12 phút / còn 11 phút) mà
-            // hình thì không, nên nó được gán lại chứ không tham gia làm khoá.
+            // The accessibility description changes every second (12 minutes
+            // left / 11 minutes left) while the image does not, so it is
+            // reassigned rather than made part of the cache key.
             hit.accessibilityDescription = accessibilityDescription
             return hit
         }
@@ -68,9 +70,9 @@ public enum MenuBarIcon {
         return image
     }
 
-    /// Ô trống cùng kích thước, dùng cho nhịp "tắt" khi icon nhấp nháy báo hết
-    /// giờ. Phải giữ nguyên kích thước, nếu không các icon bên cạnh sẽ nhảy
-    /// qua nhảy lại theo từng nhịp.
+    /// A blank of the same size, used for the "off" beat when the icon flashes
+    /// at expiry. It has to keep the size, otherwise neighbouring menu bar
+    /// icons jump back and forth on every beat.
     public static func blankImage(accessibilityDescription: String = "") -> NSImage {
         let image = NSImage(size: size)
         image.isTemplate = true
@@ -78,7 +80,7 @@ public enum MenuBarIcon {
         return image
     }
 
-    /// Bản không cache — thuần tuý, dùng cho test và cho ai cần một ảnh mới.
+    /// Uncached variant — pure, for tests and for anyone needing a fresh image.
     public static func image(
         for state: MenuBarIconState,
         accessibilityDescription: String = ""
@@ -104,11 +106,12 @@ public enum MenuBarIcon {
         min(max(value, 0), 1)
     }
 
-    // MARK: - Hình học ly (hệ toạ độ thiết kế 18×18, gốc ở góc TRÊN-TRÁI)
+    // MARK: - Cup geometry (18×18 design space, origin at TOP-LEFT)
     //
-    // Cùng một ly với `CoffeeCup` trong app, rút gọn cho 18pt: bỏ đĩa lót và
-    // khói, giữ lại vành, thân thuôn và quai — ở cỡ này thêm chi tiết chỉ làm
-    // icon đục đi. Mực cà phê vẫn là tiến trình, y như trong panel.
+    // The same cup as `CoffeeCup` in the app, reduced for 18pt: no saucer and
+    // no steam, keeping the rim, the tapered body and the handle — at this size
+    // more detail only muddies the icon. The coffee level is still the progress
+    // bar, exactly as in the panel.
 
     private static let rimY: CGFloat = 5.0
     private static let baseY: CGFloat = 13.8
@@ -117,9 +120,10 @@ public enum MenuBarIcon {
     private static let cupCenterX: CGFloat = 7.0
     private static let lineWidth: CGFloat = 1.25
 
-    /// Thân ly. `inset` > 0 cho ra lòng ly — dùng làm vùng cắt cho cà phê, để
-    /// mực cà phê không bao giờ chồm lên chính nét viền: ở 18pt mà đổ đầy sát
-    /// viền thì icon biến thành một khối đen, mất hẳn hình ly.
+    /// The cup body. `inset` > 0 yields the inner wall, used as the clip region
+    /// for the coffee so the level never spills onto the outline itself: at
+    /// 18pt, filling flush to the edge turns the icon into a black blob and the
+    /// cup shape disappears.
     private static func cupPath(
         inset: CGFloat,
         transform point: (CGFloat, CGFloat) -> NSPoint
@@ -144,15 +148,16 @@ public enum MenuBarIcon {
 
     private static func draw(_ state: MenuBarIconState, in rect: NSRect) {
         let scale = rect.width / size.width
-        // NSImage vẽ với gốc ở góc dưới-trái; bản vẽ ở trên tính từ trên xuống.
+        // NSImage draws from the bottom-left; the geometry above is top-down.
         func point(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
             NSPoint(x: rect.minX + x * scale, y: rect.maxY - y * scale)
         }
 
-        // Quai vẽ trước và mảnh hơn thân: nó là chi tiết phụ, không được tranh
-        // chấp với hình khối chính khi icon co lại còn 18pt. Hai đầu quai bám
-        // ĐÚNG lên thành ly (thành thuôn nên toạ độ x đổi theo y) — lệch vào
-        // trong một chút thôi là quai trông như xuyên thủng ly.
+        // The handle is drawn first and thinner than the body: it is secondary
+        // detail and must not compete with the main silhouette once the icon
+        // shrinks to 18pt. Both ends land EXACTLY on the wall (which tapers, so
+        // x depends on y) — even slightly inside and the handle looks like it
+        // pierces the cup.
         func wallX(atY y: CGFloat) -> CGFloat {
             let t = (y - rimY) / (baseY - rimY)
             return cupCenterX + rimHalfWidth + (baseHalfWidth - rimHalfWidth) * t
@@ -172,7 +177,7 @@ public enum MenuBarIcon {
         NSColor.black.withAlphaComponent(state.isActive ? 0.85 : 0.55).setStroke()
         handle.stroke()
 
-        // Cà phê nằm trong lòng ly, chừa hẳn một khoảng cho nét viền.
+        // The coffee sits inside the wall, leaving room for the outline.
         if state.isActive {
             let level = clamp(state.progress ?? 1)
             let inner = cupPath(inset: lineWidth, transform: point)

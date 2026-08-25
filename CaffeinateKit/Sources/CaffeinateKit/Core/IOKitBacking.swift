@@ -1,8 +1,8 @@
 import Foundation
 import IOKit.pwr_mgt
 
-/// Cài đặt thật trên IOKit. Đây là chỗ DUY NHẤT trong codebase gọi IOKit
-/// power management.
+/// The real IOKit implementation. This is the ONLY place in the codebase that
+/// calls IOKit power management.
 public struct IOKitBacking: PowerAssertionBacking {
 
     public init() {}
@@ -24,8 +24,9 @@ public struct IOKitBacking: PowerAssertionBacking {
     public func release(_ id: UInt32) throws {
         let result = IOPMAssertionRelease(id)
         guard result == kIOReturnSuccess else {
-            // Cờ để rỗng: ở tầng này chỉ còn cái ID, không còn biết nó thuộc cờ
-            // nào. AssertionManager biết, và nó bọc lại lỗi với cờ đúng.
+            // Empty flag set: at this level only the ID survives, and it no
+            // longer says which flag it belonged to. AssertionManager knows,
+            // and re-wraps the error with the right flag.
             throw AssertionError(flag: [], code: result)
         }
     }
@@ -38,7 +39,7 @@ public struct IOKitBacking: PowerAssertionBacking {
         case .userIdle: kIOPMAssertionTypePreventUserIdleSystemSleep
         default:
             preconditionFailure(
-                "assertionType(for:) chỉ nhận cờ đơn, nhận được: \(flag.rawValue)"
+                "assertionType(for:) takes single flags only, got: \(flag.rawValue)"
             )
         }
     }

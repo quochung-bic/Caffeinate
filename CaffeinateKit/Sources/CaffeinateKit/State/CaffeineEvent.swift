@@ -1,6 +1,6 @@
 import Foundation
 
-/// Mọi thứ có thể làm trạng thái thay đổi. Không có đường nào khác.
+/// Everything that can change the state. There is no other route.
 public enum CaffeineEvent: Equatable, Sendable {
     case toggledManually(Bool)
     case startedTimer(until: Date)
@@ -8,6 +8,6 @@ public enum CaffeineEvent: Equatable, Sendable {
     case triggerFired(TriggerReason)
     case triggerCleared(TriggerReason)
     case flagsChanged(AssertionFlags)
-    /// Tắt dứt khoát mọi nguồn, kể cả luật tự động đang đúng.
+    /// Stop every source decisively, including automation rules that still hold.
     case stopAll
 }

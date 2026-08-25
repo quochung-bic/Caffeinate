@@ -1,13 +1,14 @@
 import AppKit
 
-/// Bật khi bất kỳ app nào trong danh sách đang chạy.
+/// Fires while any app from the list is running.
 @MainActor
 public final class AppRunningTrigger: Trigger {
     public var onChange: (@MainActor (TriggerReason, Bool) -> Void)?
 
     private let bundleIDs: [String]
     private var observers: [NSObjectProtocol] = []
-    /// bundleID → tên hiển thị đã báo bật, để báo tắt đúng lý do.
+    /// bundleID → the display name already reported, so the matching
+    /// reason can be cleared later.
     private var reported: [String: String] = [:]
 
     public init(bundleIDs: [String]) {

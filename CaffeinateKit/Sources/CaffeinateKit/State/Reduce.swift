@@ -1,15 +1,16 @@
-/// Hàm thuần tuý: trạng thái mới chỉ phụ thuộc trạng thái cũ và sự kiện.
-/// Không I/O, không thời gian hệ thống — mọi mốc thời gian đi vào qua sự kiện.
+/// Pure function: the next state depends only on the previous state and the
+/// event. No I/O, no system clock — every instant arrives through an event.
 public func reduce(_ state: CaffeineState, _ event: CaffeineEvent) -> CaffeineState {
     var next = state
 
     switch event {
     case .toggledManually(let on):
         next.manual = on
-        // Bật thủ công NGHĨA LÀ "không giới hạn", nên nó phải xoá hẹn giờ đang
-        // chạy: để timerEndsAt sót lại thì UI vẫn vẽ vòng đếm ngược (thông tin
-        // sai), và nếu sau đó tắt thủ công thì cái hẹn giờ cũ sẽ bất ngờ sống
-        // lại. Tắt thủ công thì không đụng tới hẹn giờ — nó là nguồn độc lập.
+        // Turning on manually MEANS "no time limit", so it has to clear a
+        // running timer: leaving `timerEndsAt` behind would keep the UI drawing
+        // a countdown (wrong information), and switching manual off later would
+        // resurrect the old timer out of nowhere. Turning manual off leaves the
+        // timer alone — it is an independent source.
         if on { next.timerEndsAt = nil }
 
     case .startedTimer(let until):

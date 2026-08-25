@@ -1,15 +1,16 @@
 import Foundation
 
-/// Cấu hình người dùng chỉnh được.
+/// The settings a user can change.
 ///
-/// Không chứa launch-at-login — `SMAppService.mainApp.status` là nguồn sự thật
-/// cho việc đó, và soi gương nó vào đây chỉ tạo ra hai sự thật lệch nhau khi
-/// người dùng tắt login item từ System Settings.
+/// Launch-at-login is deliberately absent: `SMAppService.mainApp.status` is the
+/// source of truth for that, and mirroring it here would only create two
+/// truths that drift apart the moment the user disables the login item from
+/// System Settings.
 public struct Settings: Equatable, Sendable {
 
-    /// Khoảng hợp lệ của thời lượng tuỳ chỉnh. Sống ở đây chứ không phải trong
-    /// UI: đây là bất biến của dữ liệu, phải đúng kể cả khi giá trị tới từ một
-    /// file plist người dùng sửa tay chứ không qua Stepper.
+    /// Valid range for the custom duration. It lives here rather than in the
+    /// UI because it is an invariant of the data: it must hold even when the
+    /// value arrives from a hand-edited plist rather than from a Stepper.
     public static let durationRange = 1...480
 
     public var flags: AssertionFlags = .default
@@ -18,20 +19,20 @@ public struct Settings: Equatable, Sendable {
     public var appTriggerEnabled: Bool = false
     public var chargingTriggerEnabled: Bool = false
     public var externalDisplayTriggerEnabled: Bool = false
-    /// Bật sẵn ngay khi app khởi chạy. Chỉ có tác dụng thực tế nếu
-    /// launch-at-login đang bật — UI phải nói rõ điều này.
+    /// Turn on as soon as the app launches. Only useful in practice when
+    /// launch-at-login is enabled — the UI has to say so.
     public var activateOnLaunch: Bool = false
 
     public init() {}
 
-    /// Ép mọi trường về khoảng hợp lệ. Gọi ở biên đọc/ghi, nên không giá trị
-    /// hỏng nào lọt được vào phần còn lại của app.
+    /// Force every field into its valid range. Called at the read/write
+    /// boundary, so no bad value reaches the rest of the app.
     public mutating func normalize() {
         customDurationMinutes = min(
             max(customDurationMinutes, Self.durationRange.lowerBound),
             Self.durationRange.upperBound
         )
-        // Bỏ trùng nhưng GIỮ NGUYÊN thứ tự người dùng đã thêm.
+        // Drop duplicates but PRESERVE the order the user added them in.
         var seen = Set<String>()
         triggerAppBundleIDs = triggerAppBundleIDs.filter {
             !$0.isEmpty && seen.insert($0).inserted
@@ -41,20 +42,20 @@ public struct Settings: Equatable, Sendable {
 
 // MARK: - Codable
 
-/// Giải mã khoan dung có chủ đích.
+/// Deliberately lenient decoding.
 ///
-/// Cài đặt là dữ liệu của NGƯỜI DÙNG, tồn tại lâu hơn bất kỳ phiên bản app nào.
-/// Nếu thêm một trường mới mà bản cũ chưa có, hoặc người dùng hạ cấp app, thì
-/// `Codable` sinh tự động sẽ ném lỗi và — theo cách store bắt lỗi bên dưới —
-/// xoá sạch toàn bộ cấu hình. Mất hết chỉ vì thiếu một khoá là hành vi không
-/// thể chấp nhận.
+/// Settings are the USER's data and outlive any version of the app. If a new
+/// field is added that an older build never wrote, or the user downgrades, the
+/// synthesized `Codable` would throw — and, given how the store catches errors
+/// below, wipe the entire configuration. Losing everything over one missing key
+/// is not acceptable behaviour.
 ///
-/// Vậy nên mỗi trường được đọc độc lập bằng `decodeIfPresent`, thiếu thì lấy
-/// mặc định. Cộng với `schemaVersion` để sau này có chỗ bám khi cần migrate
-/// thật sự (đổi ý nghĩa một trường, chứ không phải thêm trường).
+/// So each field is read independently with `decodeIfPresent`, falling back to
+/// its default. Plus a `schemaVersion` to give a real migration something to
+/// hang off later (when a field changes meaning, not when one is added).
 extension Settings: Codable {
-    /// Tăng khi ý nghĩa của một trường ĐÃ CÓ thay đổi. Thêm trường mới thì
-    /// không cần tăng — phần đọc khoan dung ở dưới đã lo.
+    /// Bump when an EXISTING field changes meaning. Adding a new field needs
+    /// no bump — the lenient decoding below already covers it.
     static let currentSchemaVersion = 1
 
     private enum CodingKeys: String, CodingKey {
@@ -123,7 +124,7 @@ public final class UserDefaultsSettingsStore: SettingsStoring {
             guard let data = defaults.data(forKey: Self.key),
                   let decoded = try? JSONDecoder().decode(Settings.self, from: data)
             else {
-                // Dữ liệu hỏng hoặc chưa có: mặc định an toàn, không crash.
+                // Corrupt or absent: fall back to safe defaults, never crash.
                 return Settings()
             }
             return decoded

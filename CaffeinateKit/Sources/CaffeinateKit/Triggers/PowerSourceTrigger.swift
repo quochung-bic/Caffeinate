@@ -1,7 +1,7 @@
 import Foundation
 import IOKit.ps
 
-/// Bật khi máy đang chạy bằng nguồn AC.
+/// Fires while the Mac is running on AC power.
 @MainActor
 public final class PowerSourceTrigger: Trigger {
     public var onChange: (@MainActor (TriggerReason, Bool) -> Void)?
@@ -41,15 +41,15 @@ public final class PowerSourceTrigger: Trigger {
         let type = IOPSGetProvidingPowerSourceType(info)?.takeRetainedValue() as String?
         let charging = (type == kIOPMACPowerKey)
 
-        // Chỉ báo khi THỰC SỰ đổi. Đây là nền tảng cho ngữ nghĩa "Tắt là dứt
-        // khoát" ở CaffeineController.toggle(): sau khi người dùng bấm Tắt
-        // trong lúc đang sạc, baseline `isCharging` ở đây vẫn giữ `true`
-        // (không bị reset bởi stopAll), nên một thông báo nguồn điện tới sau
-        // đó mà vẫn đang sạc sẽ KHÔNG gọi onChange — không tự bật lại. Chỉ
-        // một chuyển tiếp thật (rút sạc rồi cắm lại, false→true) mới phát lại
-        // .triggerFired. Không được xoá guard này hay reset isCharging từ
-        // bên ngoài để "sửa" cho nó báo lại mỗi lần — làm vậy sẽ phá vỡ tính
-        // dứt khoát của nút Tắt.
+        // Report only on a REAL change. This underpins the "Stop is decisive"
+        // semantics in CaffeineController.toggle(): after the user presses Stop
+        // while charging, the `isCharging` baseline here stays `true` (stopAll
+        // does not reset it), so a later power notification that still says
+        // "charging" does NOT call onChange — nothing switches itself back on.
+        // Only a genuine transition (unplug, then plug back in, false→true)
+        // emits .triggerFired again. Do not delete this guard or reset
+        // isCharging from outside to "fix" it into reporting every time — that
+        // would destroy the decisiveness of the Stop button.
         guard charging != isCharging else { return }
         isCharging = charging
         onChange?(.charging, charging)

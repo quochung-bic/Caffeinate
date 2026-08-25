@@ -1,31 +1,31 @@
 import Foundation
 
-/// Giữ tập assertion đang hoạt động và đồng bộ nó với bộ cờ mong muốn.
+/// Holds the set of live assertions and keeps it in sync with the desired flags.
 ///
-/// Bất biến: `held` luôn phản ánh đúng những assertion đang thực sự tồn tại.
-/// Nếu một lệnh create thất bại giữa chừng, mọi assertion đã tạo trong lượt đó
-/// và cả những cái đang giữ từ trước đều được giải phóng — thà tắt hẳn còn hơn
-/// để người dùng tưởng đang giữ mà thực tế chỉ giữ một nửa.
+/// Invariant: `held` always reflects the assertions that actually exist. If a
+/// create fails partway through, everything created during that pass — and
+/// everything held from before — is released. Better fully off than letting the
+/// user believe the Mac is held awake when only half of it is.
 public final class AssertionManager {
-    /// Tên assertion mà app dùng thật.
+    /// The assertion name the app actually uses.
     ///
-    /// PHẢI thuần ASCII: `IOPMAssertionCreateWithName` nhận chuỗi có dấu tiếng
-    /// Việt mà không báo lỗi, nhưng `pmset -g assertions` in ra `named: ""` —
-    /// assertion trở nên vô danh, đúng lúc người dùng cần dùng pmset để kiểm
-    /// chứng app có thật sự đang giữ máy thức hay không.
+    /// MUST be pure ASCII. `IOPMAssertionCreateWithName` accepts accented text
+    /// without complaint, but `pmset -g assertions` then prints `named: ""` —
+    /// the assertion becomes anonymous at exactly the moment a user is using
+    /// pmset to check whether the app really is holding the Mac awake.
     ///
-    /// Và PHẢI giữ nguyên tiếng Anh dù giao diện có đổi ngôn ngữ: đây là chuỗi
-    /// hiển thị ở tầng hệ điều hành, cho công cụ dòng lệnh và cho log hệ thống,
-    /// không phải cho giao diện. Dịch nó là làm hỏng khả năng chẩn đoán.
+    /// It is also never localized: this string surfaces at the OS level, for
+    /// command-line tools and system logs, not in the interface. Translating it
+    /// would break diagnosability.
     public static let defaultReason = "Caffeinate is keeping this Mac awake"
 
     private let backing: PowerAssertionBacking
     private let reason: String
     private var held: [AssertionFlags: UInt32] = [:]
 
-    /// Lỗi release gần nhất chưa được một lượt giải phóng thành công "xoá dấu".
-    /// Không chỗ nào được hỏng im lặng: nếu IOKit từ chối release, người gọi
-    /// (CaffeineController) phải có cách đọc ra và hiển thị cho người dùng.
+    /// The most recent release error not yet cleared by a fully successful
+    /// release pass. Nothing fails silently: if IOKit refuses a release, the
+    /// caller (CaffeineController) must be able to read it and tell the user.
     public private(set) var lastReleaseError: AssertionError?
 
     public init(backing: PowerAssertionBacking, reason: String) {
@@ -57,21 +57,23 @@ public final class AssertionManager {
             }
         }
 
-        // Release thất bại không được ném ra ngoài: các assertion mà caller
-        // vừa yêu cầu (toCreate) đã tồn tại hợp lệ, một release hỏng không
-        // làm chúng vô hiệu. Lỗi được ghi lại qua lastReleaseError thay vì bị nuốt.
+        // A failed release must not propagate: the assertions the caller just
+        // asked for (toCreate) exist and are valid, and a botched release does
+        // not invalidate them. The error is recorded via lastReleaseError
+        // rather than swallowed.
         release(toRelease)
     }
 
-    /// Giải phóng mọi assertion. An toàn để gọi nhiều lần.
+    /// Release every assertion. Safe to call more than once.
     public func releaseAll() {
         release(AssertionFlags.all)
     }
 
-    /// Giải phóng một lô cờ, cập nhật `held` và `lastReleaseError`.
-    /// Cờ luôn bị xoá khỏi `held` dù release có báo lỗi hay không — không
-    /// retry, không để lại mục ma. `lastReleaseError` chỉ được xoá khi lô này
-    /// thực sự giải phóng ít nhất một cờ và không cờ nào thất bại.
+    /// Release a batch of flags, updating `held` and `lastReleaseError`.
+    /// A flag is always dropped from `held` whether or not its release
+    /// reported an error — no retries, no ghost entries. `lastReleaseError` is
+    /// cleared only when a pass actually released at least one flag and none
+    /// of them failed.
     private func release(_ flags: [AssertionFlags]) {
         var releasedAny = false
         var failed = false
@@ -91,8 +93,9 @@ public final class AssertionManager {
         }
     }
 
-    /// Backing chỉ biết ID nên nó ném lỗi với cờ rỗng; ở đây ta biết cờ nào,
-    /// nên bọc lại cho người dùng đọc ra được thứ có nghĩa.
+    /// The backing only knows IDs, so it throws with an empty flag set. Here we
+    /// know which flag it was, so we re-wrap the error into something the user
+    /// can be told.
     private static func releaseError(flag: AssertionFlags, underlying error: Error) -> AssertionError {
         if let assertionError = error as? AssertionError {
             return AssertionError(flag: flag, code: assertionError.code)

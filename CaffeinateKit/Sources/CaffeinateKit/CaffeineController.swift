@@ -1,45 +1,50 @@
 import Foundation
 import Observation
 
-/// Nguồn sự thật cho UI và là chỗ DUY NHẤT gọi `AssertionManager.set(flags:)`.
-/// Mọi thay đổi đi qua `send(_:) → reduce → apply()`. Không có đường tắt nào khác.
+/// Source of truth for the UI, and the ONLY place that calls
+/// `AssertionManager.set(flags:)`. Every change goes through
+/// `send(_:) → reduce → apply()`. There is no shortcut.
 ///
-/// Sống trong package (không phải app target) vì nó không phụ thuộc SwiftUI/AppKit
-/// — chỉ Foundation, Observation và phần còn lại của CaffeinateKit — nên có thể
-/// kiểm thử bằng `swift test` với backing/trigger giả, không cần dựng cả app.
+/// It lives in the package rather than the app target because it depends on
+/// neither SwiftUI nor AppKit — only Foundation, Observation and the rest of
+/// CaffeinateKit — so `swift test` can exercise it with fake backings and
+/// triggers instead of standing up the whole app.
 @MainActor
 @Observable
 public final class CaffeineController {
     public private(set) var state = CaffeineState()
 
-    /// Sự cố gần nhất, ở dạng dữ liệu. Tầng app dịch nó thành câu chữ.
+    /// The most recent failure, as data. The app layer turns it into a sentence.
     public private(set) var lastFailure: AssertionFailure?
 
-    /// Tổng thời lượng của lần hẹn giờ hiện tại — cần để tính tỉ lệ mực cà phê.
+    /// Total length of the current timer — needed to compute the coffee level.
     public private(set) var timerTotalSeconds: TimeInterval = 0
 
-    /// Nhịp một giây, CHỈ chạy trong lúc đếm ngược.
+    /// One-second tick, running ONLY during a countdown.
     ///
-    /// Vì sao nhịp này sống ở đây chứ không ở tầng giao diện: nhãn của
-    /// `MenuBarExtra` KHÔNG chạy `TimelineView`. Đã đo — trong 8 giây có hẹn
-    /// giờ, một nhãn dựng bằng `TimelineView(.periodic(by: 1))` chỉ được vẽ lại
-    /// 2 lần, cả hai đều do trạng thái đổi. Icon sẽ đứng im ở mức đầy suốt lần
-    /// hẹn giờ, tức là mất hẳn tính năng chính của nó.
+    /// Why the tick lives here rather than in the view layer: a `MenuBarExtra`
+    /// label does NOT drive `TimelineView`. Measured, not guessed — over eight
+    /// seconds of an active timer, a label built on
+    /// `TimelineView(.periodic(by: 1))` redrew twice, both times because state
+    /// changed. The icon would sit at full for the whole timer, which is
+    /// precisely the feature it exists for.
     ///
-    /// Cách duy nhất đáng tin để buộc nhãn vẽ lại là cho nó đọc một thuộc tính
-    /// `@Observable` thật sự thay đổi. Đó là `now`.
+    /// The only reliable way to force the label to redraw is to have it read an
+    /// `@Observable` property that actually changes. That property is `now`.
     ///
-    /// `iconState(at:)` vẫn nhận thời điểm từ ngoài chứ không tự đọc `Date()`,
-    /// nên phần tính toán vẫn thuần tuý và test được mà không cần chờ đồng hồ.
+    /// `iconState(at:)` still takes its instant from the caller instead of
+    /// reading `Date()`, so the arithmetic stays pure and testable without
+    /// waiting on a real clock.
     public private(set) var now: Date = .now
 
-    /// Gọi khi hẹn giờ chạy hết giờ (không phải khi người dùng tự dừng).
-    /// Tầng app dùng nó để báo cho người dùng biết; package không tự làm việc
-    /// đó vì thông báo/âm thanh là chuyện của AppKit, không phải của lõi.
+    /// Called when a timer runs out on its own — not when the user stops it.
+    /// The app layer uses this to notify the user; the package stays out of it
+    /// because notifications and sound belong to AppKit, not to the core.
     @ObservationIgnored public var onTimerExpired: (@MainActor () -> Void)?
 
-    /// Gọi mỗi khi một lần hẹn giờ bắt đầu. Tầng app dùng để xin quyền thông
-    /// báo đúng lúc người dùng vừa làm việc sẽ dẫn tới thông báo.
+    /// Called whenever a timer starts. The app layer uses it to ask for
+    /// notification permission at the moment the user does the thing that will
+    /// lead to a notification.
     @ObservationIgnored public var onTimerStarted: (@MainActor () -> Void)?
 
     @ObservationIgnored private let assertions: AssertionManager
@@ -62,10 +67,10 @@ public final class CaffeineController {
         }
     }
 
-    /// Cách dựng bộ trigger từ settings hiện hành. Tách thành seam để test
-    /// tiêm được `FakeTrigger` mà không cần chạm IOKit/NSWorkspace/NSScreen
-    /// thật — production dùng `defaultTriggerFactory`, test tự truyền factory
-    /// của mình qua init chỉ định bên dưới.
+    /// How the trigger set is built from the current settings. Factored into a
+    /// seam so tests can inject `FakeTrigger` without touching the real IOKit,
+    /// NSWorkspace or NSScreen — production uses `defaultTriggerFactory`, tests
+    /// pass their own factory through the designated init below.
     typealias TriggerFactory = @MainActor (Settings) -> [any Trigger]
 
     public convenience init(
@@ -78,9 +83,9 @@ public final class CaffeineController {
         self.init(assertions: assertions, store: store, triggerFactory: Self.defaultTriggerFactory)
     }
 
-    /// Init chỉ định — nhận thêm `triggerFactory` để test tiêm trigger giả.
-    /// Không public: chỉ dùng nội bộ module (production đi qua init tiện lợi
-    /// ở trên; test dùng `@testable import` để chạm tới init này).
+    /// Designated init — takes a `triggerFactory` so tests can inject fakes.
+    /// Not public: module-internal only. Production goes through the
+    /// convenience init above; tests reach this one via `@testable import`.
     init(
         assertions: AssertionManager,
         store: any SettingsStoring,
@@ -119,29 +124,31 @@ public final class CaffeineController {
         syncTicker()
     }
 
-    // MARK: - Hành động của người dùng
+    // MARK: - User actions
 
-    /// Bật/tắt thủ công.
+    /// Toggle manually.
     ///
-    /// Ngữ nghĩa "Tắt" (nhánh `state.isActive`, gửi `.stopAll`) là DỨT KHOÁT:
-    /// nó xoá manual + timer + MỌI lý do trigger đang có trong `state`, nhưng
-    /// KHÔNG đụng tới trạng thái nội bộ (baseline) của từng trigger — ví dụ
-    /// `PowerSourceTrigger.isCharging` vẫn giữ nguyên `true` nếu máy vẫn đang
-    /// cắm sạc. Trigger chỉ phát `.triggerFired` lại trên một chuyển tiếp
-    /// false→true THẬT SỰ (rút sạc rồi cắm lại), không phải mỗi lần có sự
-    /// kiện trạng thái mới mà điều kiện không đổi. Vì vậy bấm Tắt trong khi
-    /// đang sạc sẽ tắt hẳn, và KHÔNG tự bật lại vài giây sau chỉ vì hệ thống
-    /// gửi thêm một thông báo "vẫn đang sạc". Đây là hành vi có chủ đích —
-    /// không được "sửa" thành reset baseline trigger lúc stopAll, vì làm vậy
-    /// sẽ khiến rule tự động bật lại ngay ở lần cập nhật trạng thái kế tiếp
-    /// trong khi điều kiện chưa hề đổi, phá vỡ tính dứt khoát của nút Tắt.
+    /// Stopping (the `state.isActive` branch, which sends `.stopAll`) is
+    /// DECISIVE: it clears manual, timer and EVERY trigger reason currently in
+    /// `state`, but does NOT touch each trigger's internal baseline — for
+    /// example `PowerSourceTrigger.isCharging` stays `true` if the Mac is still
+    /// plugged in. A trigger only emits `.triggerFired` again on a REAL
+    /// false→true transition (unplug, then plug back in), not on every status
+    /// event that repeats an unchanged condition. So pressing Stop while
+    /// charging really does stop, and does NOT switch itself back on seconds
+    /// later just because the system sent another "still charging" notice.
     ///
-    /// Trường hợp biên đã được chấp nhận (không cố sửa): nếu sau đó người
-    /// dùng đổi một setting bất kỳ khiến `rebuildTriggers()` chạy lại, bộ
-    /// trigger mới sẽ tự `refresh()` và có thể phát hiện điều kiện vẫn đúng
-    /// (ví dụ vẫn đang sạc) rồi bật lại rule đó ngay. Đó là hệ quả hợp lý của
-    /// "rule đang bật + điều kiện đúng → active khi đánh giá lại từ đầu", nên
-    /// không thêm state để chặn.
+    /// This is deliberate. Do not "fix" it by resetting trigger baselines on
+    /// stopAll: that would make the rule re-activate on the very next status
+    /// update while the condition had not changed at all, destroying the
+    /// decisiveness of the Stop button.
+    ///
+    /// One accepted edge case, deliberately not papered over: if the user
+    /// afterwards changes any setting that runs `rebuildTriggers()`, the new
+    /// trigger set calls `refresh()` and may find the condition still true
+    /// (still charging, say) and re-activate that rule immediately. That is the
+    /// consistent consequence of "rule enabled + condition true → active when
+    /// evaluated from scratch", so no extra state is added to block it.
     public func toggle() {
         if state.isActive {
             stop()
@@ -150,23 +157,23 @@ public final class CaffeineController {
         }
     }
 
-    /// Tắt dứt khoát.
+    /// Stop decisively.
     public func stop() {
         cancelTimerTask()
         send(.stopAll)
     }
 
-    /// Bật không giới hạn. Huỷ luôn hẹn giờ đang chạy — reduce đã xoá
-    /// `timerEndsAt`, nhưng Task hẹn giờ vẫn sống nếu không huỷ ở đây và sẽ
-    /// bắn `.timerExpired` muộn.
+    /// Turn on with no time limit. This also cancels a running timer: reduce
+    /// already clears `timerEndsAt`, but the timer Task would outlive it and
+    /// fire a late `.timerExpired` if it were not cancelled here.
     public func startIndefinite() {
         cancelTimerTask()
         send(.toggledManually(true))
     }
 
-    /// Bật trong `minutes` phút rồi tự tắt phần hẹn giờ.
-    /// `minutes` bị kẹp về khoảng hợp lệ — đây là API public, không thể giả
-    /// định người gọi đã kiểm tra hộ.
+    /// Stay on for `minutes`, then let the timer switch itself off.
+    /// `minutes` is clamped to the valid range — this is public API, and it
+    /// cannot assume the caller checked first.
     public func startTimer(minutes: Int) {
         let minutes = min(
             max(minutes, Settings.durationRange.lowerBound),
@@ -181,11 +188,12 @@ public final class CaffeineController {
         onTimerStarted?()
 
         timerTask = Task { [weak self] in
-            // Ngủ theo từng chặng ngắn rồi ĐỌC LẠI ĐỒNG HỒ, thay vì ngủ một
-            // phát đúng bằng thời lượng. `Task.sleep` chỉ hứa "ít nhất chừng
-            // này", và giữa chừng máy có thể ngủ/thức hoặc người dùng chỉnh
-            // giờ hệ thống — ngủ một phát thì sai số đó không bao giờ được
-            // phát hiện, còn ở đây nó tự chỉnh lại sau tối đa một chặng.
+            // Sleep in short legs and RE-READ THE CLOCK, rather than sleeping
+            // once for the full duration. `Task.sleep` only promises "at least
+            // this long", and in between the machine can sleep and wake or the
+            // user can change the system clock — a single long sleep would
+            // never notice that drift, whereas this corrects itself within one
+            // leg at most.
             while !Task.isCancelled {
                 let remaining = endsAt.timeIntervalSinceNow
                 guard remaining > 0 else { break }
@@ -193,14 +201,14 @@ public final class CaffeineController {
             }
             guard !Task.isCancelled, let self else { return }
             self.send(.timerExpired)
-            // Chỉ chạy khi hẹn giờ đi hết quãng đường của nó. Bấm Tắt hay
-            // chuyển sang "không giới hạn" đều huỷ Task này, nên không có
-            // chuyện báo "hết giờ" cho một lần hẹn giờ mà người dùng tự dừng.
+            // Only runs when the timer went the full distance. Pressing Stop or
+            // switching to indefinite cancels this Task, so a timer the user
+            // stopped never reports "time's up".
             self.onTimerExpired?()
         }
     }
 
-    /// Giải phóng tường minh khi app thoát. An toàn để gọi nhiều lần.
+    /// Explicit teardown at app exit. Safe to call more than once.
     public func shutdown() {
         cancelTimerTask()
         tickerTask?.cancel()
@@ -210,21 +218,21 @@ public final class CaffeineController {
         assertions.releaseAll()
     }
 
-    // MARK: - Dẫn xuất cho giao diện
+    // MARK: - Derived for the UI
 
-    /// Còn đang đếm ngược hay không. UI dùng để biết có cần nhịp đồng hồ không
-    /// — không có hẹn giờ thì không có gì thay đổi theo thời gian để mà vẽ lại.
+    /// Whether a countdown is running. The UI uses this to know whether it
+    /// needs a clock at all — with no timer, nothing changes over time.
     public var isCountingDown: Bool {
         state.timerEndsAt != nil
     }
 
-    /// Trạng thái icon menu bar TẠI một thời điểm cho trước.
+    /// Menu bar icon state AT a given instant.
     ///
-    /// Nhận `date` từ ngoài thay vì tự đọc `Date()`: trước đây controller nuôi
-    /// một `Task` đánh nhịp mỗi giây chỉ để cập nhật một biến `now`, chạy song
-    /// song với `TimelineView` của giao diện — hai đồng hồ cho cùng một việc.
-    /// Giờ giao diện là chỗ duy nhất giữ nhịp, còn hàm này thuần tuý theo thời
-    /// gian nên cũng test được mà không cần chờ đồng hồ thật chạy.
+    /// Takes `date` from the caller instead of reading `Date()`: the controller
+    /// used to run a Task ticking once a second purely to update a `now`
+    /// property, alongside the view layer's own `TimelineView` — two clocks for
+    /// one job. Now the view layer keeps the only beat, and this function is
+    /// pure in time, so it is testable without waiting on a real clock.
     public func iconState(at date: Date) -> MenuBarIconState {
         MenuBarIconState(
             isActive: state.isActive,
@@ -233,16 +241,16 @@ public final class CaffeineController {
         )
     }
 
-    /// nil khi đang bật không giới hạn — icon sẽ vẽ ly đầy thay vì vơi dần.
+    /// nil while on indefinitely — the icon draws a full cup rather than draining.
     private func timerProgress(at date: Date) -> Double? {
         guard let endsAt = state.timerEndsAt, timerTotalSeconds > 0 else { return nil }
         return max(0, endsAt.timeIntervalSince(date)) / timerTotalSeconds
     }
 
-    // MARK: - Nội bộ
+    // MARK: - Internals
 
-    /// Bật nhịp khi có hẹn giờ, tắt khi không. Không để đồng hồ quay không tải:
-    /// ngoài lúc đếm ngược thì chẳng có gì thay đổi theo thời gian để mà vẽ.
+    /// Start the tick when a timer exists, stop it when one does not. No idling
+    /// clock: outside a countdown there is nothing time-dependent to draw.
     private func syncTicker() {
         guard state.timerEndsAt != nil else {
             tickerTask?.cancel()
@@ -264,27 +272,28 @@ public final class CaffeineController {
     private func cancelTimerTask() {
         timerTask?.cancel()
         timerTask = nil
-        // Về 0 để vòng tính tỉ lệ không còn mốc cũ để chia.
+        // Back to zero so the progress calculation has no stale total to divide by.
         timerTotalSeconds = 0
     }
 
-    /// Dựng lại bộ trigger theo cài đặt hiện tại. Gọi lại mỗi khi settings đổi.
-    /// Không public: chỉ `settings` didSet và init trong module này gọi tới —
-    /// app target không cần và không nên gọi thẳng, để tránh bỏ qua luồng
-    /// "settings đổi → rebuild" có chủ đích.
+    /// Rebuild the trigger set from the current settings. Called whenever
+    /// settings change. Not public: only `settings`' didSet and this module's
+    /// init reach it — the app target neither needs nor should call it
+    /// directly, which would bypass the deliberate "settings changed → rebuild"
+    /// path.
     func rebuildTriggers() {
         engine?.stop()
 
-        // TriggerEngine.stop() đặt isRunning = false trước khi gọi stop() của
-        // từng trigger, và onChange bị chặn theo isRunning — nên sự kiện "tắt"
-        // mà trigger cũ cố phát ra lúc dừng sẽ bị nuốt (đây là thiết kế có chủ
-        // đích, xem test silentAfterStop). Vì vậy phải tự tay xoá hết các lý
-        // do trigger còn sót lại từ cấu hình cũ, KHÔNG phân biệt bộ trigger
-        // mới rỗng hay không — nếu chỉ xoá khi rỗng thì lý do nào bị bộ
-        // trigger mới bỏ sót (ví dụ tắt App-trigger nhưng vẫn còn
-        // Charging-trigger) sẽ kẹt lại vĩnh viễn. Không dùng .stopAll: nó
-        // cũng xoá cả manual/timer, không phải điều ta muốn ở đây.
-        // Chụp lại tập hợp trước vì send() làm thay đổi state khi đang lặp.
+        // TriggerEngine.stop() sets isRunning = false before calling each
+        // trigger's stop(), and onChange is gated on isRunning — so the "off"
+        // events an old trigger tries to emit while shutting down are swallowed
+        // (deliberate; see the silentAfterStop test). That is why we have to
+        // drain every leftover trigger reason by hand, REGARDLESS of whether
+        // the new trigger set is empty. Draining only when it is empty would
+        // strand any reason the new set happens to miss — disabling the app
+        // trigger while the charging trigger stays on, say — forever. Not
+        // .stopAll: that would clear manual and timer too, which is not what we
+        // want here. Iterate over a snapshot, because send() mutates state.
         for reason in state.triggerReasons {
             send(.triggerCleared(reason))
         }
@@ -296,9 +305,9 @@ public final class CaffeineController {
             return
         }
 
-        // start() gọi refresh() ngay cho mỗi trigger, nên lý do nào vẫn còn
-        // đúng dưới cấu hình mới (ví dụ vẫn đang cắm sạc) sẽ được phát lại
-        // .triggerFired ngay lập tức — không mất trạng thái thật.
+        // start() calls refresh() on each trigger straight away, so any reason
+        // still true under the new configuration (still charging, say) emits
+        // .triggerFired again immediately — no real state is lost.
         let engine = TriggerEngine(triggers: triggers)
         engine.onEvent = { [weak self] event in
             self?.send(event)
@@ -307,9 +316,10 @@ public final class CaffeineController {
         self.engine = engine
     }
 
-    /// Chỗ duy nhất chạm tới `AssertionManager`. Lỗi tạo thì tắt hẳn và báo,
-    /// không giả vờ đang bật. Lỗi release không làm mất hiệu lực các cờ vừa tạo
-    /// thành công nên chỉ báo cho người dùng biết, không ép trạng thái về tắt.
+    /// The only place that touches `AssertionManager`. A failed create forces
+    /// the state off and reports it rather than pretending to be on. A failed
+    /// release does not invalidate the flags just created successfully, so it
+    /// is only reported — the state is not forced off.
     private func apply() {
         do {
             try assertions.set(flags: state.effectiveFlags)

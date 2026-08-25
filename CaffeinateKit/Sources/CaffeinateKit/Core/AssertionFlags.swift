@@ -1,10 +1,9 @@
-/// Bốn khía cạnh "giữ thức" có thể bật/tắt độc lập.
-/// Mỗi cờ đơn tương ứng một assertion IOKit.
+/// The four aspects of "stay awake" that can be switched on independently.
+/// Each single flag maps to one IOKit assertion.
 ///
-/// Không có `displayName` ở đây — và đó là chủ ý. Kiểu này là dữ liệu, không
-/// phải giao diện: gắn chuỗi tiếng Việt vào nó sẽ khoá cả package vào một ngôn
-/// ngữ và buộc phần lõi phải biết về việc trình bày. Tên hiển thị nằm ở tầng
-/// app, trong String Catalog.
+/// There is deliberately no `displayName` here. This type is data, not
+/// presentation: attaching user-facing text would force the core to know about
+/// how things are shown. Display names live in the app layer.
 public struct AssertionFlags: OptionSet, Sendable, Hashable, Codable {
     public let rawValue: Int
 
@@ -17,17 +16,18 @@ public struct AssertionFlags: OptionSet, Sendable, Hashable, Codable {
     public static let disk     = AssertionFlags(rawValue: 1 << 2)
     public static let userIdle = AssertionFlags(rawValue: 1 << 3)
 
-    /// Cấu hình khởi điểm: chỉ giữ hệ thống thức. Màn hình cứ để macOS tự tắt
-    /// theo cài đặt của người dùng — giữ màn hình sáng là lựa chọn tốn pin và
-    /// hiếm khi cần, nên nó phải là thứ người dùng chủ động bật.
+    /// Starting configuration: keep the system awake, nothing more. Let macOS
+    /// turn the display off on the user's own schedule — keeping the screen lit
+    /// is expensive and rarely wanted, so it has to be opted into.
     public static let `default`: AssertionFlags = [.system]
 
-    /// Bốn cờ đơn, theo thứ tự chuẩn tắc dùng ở mọi nơi (UI, test, chẩn đoán).
-    /// Thứ tự đi từ "hiếm khi không cần" tới "hiếm khi cần".
+    /// The four single flags, in the canonical order used everywhere (UI,
+    /// tests, diagnostics). Ordered from "rarely unwanted" to "rarely wanted".
     public static let all: [AssertionFlags] = [.system, .display, .disk, .userIdle]
 
-    /// Mã ổn định để tra cứu chuỗi hiển thị ở tầng app và để ghi log/chẩn đoán.
-    /// Chỉ có nghĩa với cờ đơn; tổ hợp trả về `nil`.
+    /// Stable identifier, used by the app layer to look up display text and by
+    /// logging and diagnostics. Meaningful only for single flags; combinations
+    /// return `nil`.
     public var identifier: String? {
         switch self {
         case .system:   "system"

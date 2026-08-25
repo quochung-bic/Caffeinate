@@ -1,4 +1,5 @@
-/// Một luật tự động độc lập. Chỉ báo bật/tắt, không biết gì về phần còn lại.
+/// One self-contained automation rule. It only reports on/off, and knows
+/// nothing about the rest of the system.
 @MainActor
 public protocol Trigger: AnyObject {
     var onChange: (@MainActor (TriggerReason, Bool) -> Void)? { get set }
@@ -6,8 +7,8 @@ public protocol Trigger: AnyObject {
     func stop()
 }
 
-/// Gom các trigger lại và dịch chúng thành CaffeineEvent.
-/// Không suy luận gì thêm — việc hợp nhất là của reduce.
+/// Collects the triggers and translates them into CaffeineEvents.
+/// It infers nothing further — combining them is reduce's job.
 @MainActor
 public final class TriggerEngine {
     private let triggers: [any Trigger]
