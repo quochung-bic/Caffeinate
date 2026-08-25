@@ -168,7 +168,6 @@
 			developmentRegion = vi;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				vi,
 				en,
 				Base,
 			);

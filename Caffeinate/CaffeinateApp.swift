@@ -2,28 +2,29 @@ import SwiftUI
 import AppKit
 import CaffeinateKit
 
-/// Caffeinate là ứng dụng thanh menu: không có icon Dock, không có cửa sổ chính.
+/// Caffeinate is a menu bar app: no Dock icon, no main window.
 ///
-/// Hệ quả kiến trúc, không phải chi tiết thẩm mỹ — icon trên thanh menu là bề
-/// mặt DUY NHẤT luôn tồn tại, nên mọi thứ phải sống suốt phiên đều móc vào đó.
-/// Cửa sổ Cài đặt chỉ là một khung nhìn phụ, đóng mở lúc nào cũng được mà không
-/// ảnh hưởng gì tới việc app có đang giữ máy thức hay không.
+/// That is an architectural consequence, not a cosmetic detail — the menu bar
+/// icon is the ONLY surface that always exists, so anything that has to live
+/// for the whole session hangs off it. The Settings window is a secondary view
+/// that can be opened and closed at any time without affecting whether the app
+/// is holding the Mac awake.
 ///
-/// Bản trước có thêm một cửa sổ chính, và gần như toàn bộ độ phức tạp của vòng
-/// đời app nằm ở chỗ điều phối nó với panel: một `NSApplicationDelegate` để
-/// đoán xem lúc khởi động có nên mở cửa sổ không, một bộ theo dõi `NSPanel`
-/// giành key để đóng cửa sổ khi panel bật lên, một bộ đếm yêu cầu mở cửa sổ để
-/// hai yêu cầu liên tiếp không nuốt nhau. Bỏ cửa sổ chính là bỏ hết cả ba.
+/// An earlier version also had a main window, and nearly all of the app's
+/// lifecycle complexity was in coordinating it with the panel: an
+/// `NSApplicationDelegate` guessing whether to open a window at launch, an
+/// `NSPanel` key-window watcher to close the window when the panel appeared,
+/// and a request counter so two consecutive open requests would not swallow
+/// each other. Dropping the main window dropped all three.
 @main
 struct CaffeinateApp: App {
     @State private var controller = CaffeineController()
     @State private var expiryAlert = TimerExpiryAlert()
     @State private var lifecycle = AppLifecycle()
-    @State private var language = LanguagePreference()
 
     init() {
-        // App.init chạy trên main thread nhưng chưa được đánh dấu isolated,
-        // nên phải nói tường minh thay vì bỏ qua cảnh báo.
+        // App.init runs on the main thread but is not marked isolated yet, so
+        // say so explicitly rather than silencing the warning.
         MainActor.assumeIsolated { LaunchEnvironment.applyActivationPolicy() }
     }
 
@@ -35,34 +36,27 @@ struct CaffeinateApp: App {
     private var menuBar: some Scene {
         MenuBarExtra {
             ControlPanel(controller: controller, expiryAlert: expiryAlert)
-                .environment(\.locale, language.locale)
         } label: {
-            MenuBarLabel(controller: controller, expiryAlert: expiryAlert, language: language)
+            MenuBarLabel(controller: controller, expiryAlert: expiryAlert)
                 .task {
-                    lifecycle.install(
-                        controller: controller,
-                        expiryAlert: expiryAlert,
-                        language: language
-                    )
+                    lifecycle.install(controller: controller, expiryAlert: expiryAlert)
                 }
         }
         .menuBarExtraStyle(.window)
     }
 
-    /// `SwiftUI.` là bắt buộc chứ không phải để cho đẹp: `CaffeinateKit` cũng
-    /// export một kiểu tên `Settings` (bộ cấu hình người dùng), nên viết trần
-    /// `Settings { … }` ở đây sẽ bắt vào nhầm kiểu và trình biên dịch báo lỗi ở
-    /// một chỗ hoàn toàn khác.
+    /// The `SwiftUI.` prefix is required, not decorative: `CaffeinateKit` also
+    /// exports a type called `Settings` (the user's configuration), so a bare
+    /// `Settings { … }` here binds to the wrong type and the compiler reports
+    /// the error somewhere else entirely.
     private var settings: some Scene {
         SwiftUI.Settings {
-            SettingsView(controller: controller, language: language)
-                .environment(\.locale, language.locale)
+            SettingsView(controller: controller)
         }
     }
-
 }
 
-/// Những thứ chỉ phụ thuộc vào cách tiến trình được khởi chạy.
+/// Everything that depends only on how the process was launched.
 enum LaunchEnvironment {
     static let uiTestingArgument = "-CaffeinateUITesting"
     static let uiTestWindowID = "ui-test-harness"
@@ -71,21 +65,24 @@ enum LaunchEnvironment {
         ProcessInfo.processInfo.arguments.contains(uiTestingArgument)
     }
 
-    /// Bề mặt nào được đưa vào cửa sổ test. Cửa sổ Cài đặt là một `Settings`
-    /// scene mà XCUITest không mở được từ ngoài, nên nó cần đường vào riêng —
-    /// nếu không thì toàn bộ cửa sổ đó không có test nào, và đúng chỗ ấy đã có
-    /// một lỗi trợ năng lọt qua: bốn công tắc cờ đều không có nhãn.
+    /// Which surface goes into the test window. The Settings window is a
+    /// `Settings` scene that XCUITest cannot open from outside, so it needs its
+    /// own way in — without one, that whole window would have no tests at all,
+    /// and that is exactly where an accessibility bug slipped through: all four
+    /// flag switches had no label.
     enum TestSurface: String {
         case panel
         case settings
     }
 
-    /// Đọc thẳng từ đối số tiến trình chứ không qua `UserDefaults`.
+    /// Read straight from the process arguments rather than through
+    /// `UserDefaults`.
     ///
-    /// Miền đối số của `NSUserDefaults` gom theo cặp `-khoá giá trị`, mà
-    /// `-CaffeinateUITesting` là một cờ trần không có giá trị — nó nuốt luôn
-    /// token đứng sau. Đã vấp: cờ bề mặt đặt ngay sau nó thì không bao giờ đọc
-    /// ra được, và app lặng lẽ mở panel thay vì cửa sổ Cài đặt.
+    /// The `NSUserDefaults` argument domain parses `-key value` pairs, and
+    /// `-CaffeinateUITesting` is a bare flag with no value — so it swallows the
+    /// token after it. Learned the hard way: the surface flag placed right
+    /// after it could never be read, and the app quietly opened the panel
+    /// instead of the Settings window.
     static var testSurface: TestSurface {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: surfaceArgument),
@@ -97,10 +94,10 @@ enum LaunchEnvironment {
 
     static let surfaceArgument = "-CaffeinateUITestSurface"
 
-    /// `LSUIElement` trong Info.plist đã đặt app ở chế độ phụ trợ. Chỉ khi chạy
-    /// UI test mới nâng lên `.regular`, vì tiến trình chạy test cần app có cửa
-    /// sổ thật để "activate" — một app phụ trợ không cửa sổ sẽ làm
-    /// `XCUIApplication.launch()` thất bại với "Failed to activate".
+    /// `LSUIElement` in Info.plist already puts the app in accessory mode. Only
+    /// a UI test run promotes it to `.regular`, because the test runner needs a
+    /// real window to activate — an accessory app with no window makes
+    /// `XCUIApplication.launch()` fail with "Failed to activate".
     @MainActor
     static func applyActivationPolicy() {
         guard isUITesting else { return }
@@ -108,12 +105,13 @@ enum LaunchEnvironment {
     }
 }
 
-/// Những thứ phải được gắn đúng MỘT lần cho cả phiên chạy.
+/// Everything that must be wired up exactly ONCE per session.
 ///
-/// `install` cố ý idempotent. `.task` gắn nó vào nhãn của `MenuBarExtra`, và
-/// SwiftUI không hứa hẹn gì về việc dựng lại view đó — bản trước không có chốt
-/// này nên mỗi lần dựng lại là thêm một observer `willTerminate` nữa, tức là
-/// `shutdown()` chạy nhiều lần lúc thoát.
+/// `install` is deliberately idempotent. `.task` attaches it to the
+/// `MenuBarExtra` label, and SwiftUI promises nothing about how often that view
+/// is rebuilt — an earlier version lacked this latch, so every rebuild added
+/// another `willTerminate` observer, meaning `shutdown()` ran several times at
+/// exit.
 @MainActor
 @Observable
 final class AppLifecycle {
@@ -121,11 +119,7 @@ final class AppLifecycle {
     @ObservationIgnored private var terminationObserver: NotificationObserverToken?
     @ObservationIgnored private var uiTestHarness: UITestHarnessWindow?
 
-    func install(
-        controller: CaffeineController,
-        expiryAlert: TimerExpiryAlert,
-        language: LanguagePreference
-    ) {
+    func install(controller: CaffeineController, expiryAlert: TimerExpiryAlert) {
         guard !installed else { return }
         installed = true
 
@@ -134,18 +128,17 @@ final class AppLifecycle {
             case .panel:
                 uiTestHarness = UITestHarnessWindow(
                     content: ControlPanel(controller: controller, expiryAlert: expiryAlert)
-                        .environment(\.locale, language.locale)
                 )
             case .settings:
                 uiTestHarness = UITestHarnessWindow(
-                    content: SettingsView(controller: controller, language: language)
-                        .environment(\.locale, language.locale)
+                    content: SettingsView(controller: controller)
                 )
             }
         }
 
-        // IOKit tự dọn assertion khi tiến trình chết, nhưng làm tường minh thì
-        // hành vi suy luận được — và nó cũng dừng luôn trigger lẫn hẹn giờ.
+        // IOKit cleans up assertions when the process dies, but doing it
+        // explicitly makes the behaviour something you can reason about — and
+        // it also stops the triggers and the timer.
         terminationObserver = NotificationObserverToken(
             forName: NSApplication.willTerminateNotification
         ) {
@@ -154,22 +147,22 @@ final class AppLifecycle {
 
         controller.onTimerStarted = { expiryAlert.prepareForTimer() }
         controller.onTimerExpired = {
-            // Hết giờ mà vẫn active nghĩa là một luật tự động đang giữ máy
-            // thức — báo đúng chuyện đó, đừng nói máy sắp ngủ.
-            expiryAlert.fire(stillActive: controller.state.isActive, language: language)
+            // Still active after expiry means an automation rule is holding the
+            // Mac awake — say that, rather than claiming it is about to sleep.
+            expiryAlert.fire(stillActive: controller.state.isActive)
         }
     }
 }
 
-/// Đăng ký quan sát theo kiểu RAII: giữ token sống đúng bằng vòng đời của
-/// object này, và gỡ đăng ký khi nó chết.
+/// RAII-style observer registration: the token lives exactly as long as this
+/// object, and is removed when the object dies.
 ///
-/// Không có deinit nào ở `AppLifecycle` phải nhớ dọn — quên dọn là lỗi kinh
-/// điển của `addObserver(forName:)`, và cách chắc chắn nhất để không quên là
-/// làm cho việc dọn không cần ai nhớ.
+/// No deinit in `AppLifecycle` has to remember to clean up — forgetting is the
+/// classic `addObserver(forName:)` bug, and the surest way not to forget is to
+/// make remembering unnecessary.
 private final class NotificationObserverToken: @unchecked Sendable {
-    // @unchecked: token chỉ được trao lại cho removeObserver, vốn an toàn với
-    // đa luồng. Không có trạng thái nào khác đi qua ranh giới actor.
+    // @unchecked: the token is only ever handed back to removeObserver, which
+    // is thread-safe. No other state crosses an actor boundary.
     private let token: any NSObjectProtocol
 
     init(forName name: Notification.Name, handler: @escaping @MainActor () -> Void) {

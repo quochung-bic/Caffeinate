@@ -1,24 +1,25 @@
 import SwiftUI
 
-/// Ly cà phê + thời gian còn lại. Không có vòng tiến trình: mực cà phê ĐÃ LÀ
-/// thanh tiến trình rồi, thêm một cái vòng nữa là nói cùng một điều hai lần.
+/// The coffee cup plus the time remaining. No progress ring: the coffee level
+/// IS the progress bar, and adding a ring would say the same thing twice.
 ///
-/// Thời gian luôn tính lại từ `endsAt` chứ không đếm lùi bằng biến riêng, nên
-/// máy ngủ rồi thức dậy vẫn không lệch số.
+/// The time is always recomputed from `endsAt` rather than counted down in a
+/// variable, so sleeping and waking never leaves the number wrong.
 ///
-/// # Ba nhịp, không phải một
+/// # Three clocks, not one
 ///
-/// Trước đây cả khối nằm trong MỘT `TimelineView` chạy 24 fps, nên mỗi khung
-/// hình dựng lại luôn cả phần tử trợ năng bọc ngoài. Hậu quả không chỉ là tốn
-/// CPU: cây accessibility không bao giờ đứng yên, VoiceOver mất chỗ bám và một
-/// truy vấn UI test lên nó chạy tới lúc hết giờ mà không xong.
+/// This block used to sit inside ONE `TimelineView` running at 24 fps, so every
+/// frame rebuilt the accessibility element wrapping it. The cost was not just
+/// CPU: the accessibility tree never settled, VoiceOver lost its anchor, and a
+/// UI test query against it ran until it timed out.
 ///
-/// Giờ mỗi thứ chạy đúng nhịp nó cần:
-/// - ly (khói + mực cà phê): 20 fps, và dừng hẳn khi không hoạt động;
-/// - số đếm ngược: 1 Hz, và chỉ tồn tại khi thật sự có hẹn giờ;
-/// - nhãn trợ năng: KHÔNG có nhịp nào — nó nói "hẹn giờ tới 15:47" thay vì
-///   "còn 14 phút", nên đứng yên suốt lần hẹn giờ. Một nhãn đổi mỗi giây là
-///   nhãn mà VoiceOver đọc lại không ngừng, tức là tệ hơn không có.
+/// Now each part ticks at the rate it actually needs:
+/// - the cup (steam plus coffee level): 20 fps, and stopped entirely when inactive;
+/// - the countdown number: 1 Hz, and only present when a timer really exists;
+/// - the accessibility label: NO clock at all — it says "timer until 15:47"
+///   rather than "14 minutes left", so it holds still for the whole timer. A
+///   label that changes every second is a label VoiceOver reads over and over,
+///   which is worse than none.
 struct CoffeeGauge: View {
     let endsAt: Date?
     let totalSeconds: TimeInterval
@@ -27,14 +28,15 @@ struct CoffeeGauge: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Hợp đồng với `SmokeTests`.
+    /// Contract with `SmokeTests`.
     static let accessibilityIdentifier = "caffeine-gauge"
 
-    /// 20 fps, không phải 24 hay 60.
+    /// 20 fps, not 24 or 60.
     ///
-    /// Khói là chuyển động hữu cơ, chậm; ở 20 fps mắt không phân biệt được với
-    /// 60, còn máy thì vẽ ít hơn ba lần. Với một ứng dụng mà lý do tồn tại là
-    /// quản lý năng lượng, đốt GPU để làm mượt một sợi khói là tự mâu thuẫn.
+    /// Steam is slow, organic motion; at 20 fps the eye cannot tell it from 60,
+    /// while the machine draws three times less. For an app whose whole reason
+    /// to exist is power management, burning GPU to smooth a wisp of steam
+    /// would contradict itself.
     private static let animatedInterval = 1.0 / 20.0
 
     var body: some View {
@@ -45,18 +47,18 @@ struct CoffeeGauge: View {
         .animation(.easeOut(duration: 0.45), value: mode)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        // Định danh cố định để bộ UI test tìm thẳng tới phần tử này thay vì
-        // quét toàn cây theo nhãn: cây đang có hoạt ảnh nên một truy vấn diện
-        // rộng phải chờ nó đứng yên, mà nó thì không bao giờ đứng yên.
+        // A fixed identifier so the UI tests can go straight to this element
+        // instead of scanning the tree by label: the tree is animating, and a
+        // broad query has to wait for it to settle, which it never does.
         .accessibilityIdentifier(Self.accessibilityIdentifier)
     }
 
-    // MARK: - Ly
+    // MARK: - Cup
 
     private var cup: some View {
-        // Giảm chuyển động thì khói tắt, nên chỉ còn mực cà phê cần cập nhật —
-        // 1 Hz là đủ. Không hoạt động thì dừng hẳn timeline thay vì vẽ lại liên
-        // tục một cái ly đứng yên.
+        // With reduced motion the steam is off, so only the coffee level needs
+        // updating — 1 Hz is plenty. While inactive the timeline stops entirely
+        // rather than redrawing a motionless cup.
         TimelineView(
             .animation(
                 minimumInterval: reduceMotion ? 1 : Self.animatedInterval,
@@ -74,7 +76,7 @@ struct CoffeeGauge: View {
         .accessibilityHidden(true)
     }
 
-    // MARK: - Số
+    // MARK: - Numbers
 
     @ViewBuilder
     private var readout: some View {
@@ -83,8 +85,8 @@ struct CoffeeGauge: View {
                 readout(remaining: max(0, endsAt.timeIntervalSince(context.date)))
             }
         } else {
-            // Không có hẹn giờ thì không có gì đếm: "∞" hay "—" đứng yên, nên
-            // không dựng timeline nào cả.
+            // With no timer there is nothing to count: "∞" and "—" hold still,
+            // so no timeline is created at all.
             readout(remaining: nil)
         }
     }
@@ -105,7 +107,7 @@ struct CoffeeGauge: View {
         }
     }
 
-    // MARK: - Dẫn xuất
+    // MARK: - Derived
 
     private enum Mode: Int { case off, indefinite, countdown }
 
@@ -127,27 +129,27 @@ struct CoffeeGauge: View {
         return String(format: "%02d:%02d", total / 60, total % 60)
     }
 
-    private var caption: LocalizedStringKey {
+    private var caption: String {
         switch mode {
-        case .countdown:    "còn lại"
-        case .indefinite:   "không giới hạn"
-        case .off:          "đang tắt"
+        case .countdown:    "left"
+        case .indefinite:   "indefinite"
+        case .off:          "off"
         }
     }
 
-    /// Nhãn này là hợp đồng với bộ UI test — nó là cách đáng tin nhất để đọc ra
-    /// trạng thái active từ ngoài tiến trình. Đổi câu chữ ở đây thì phải đổi cả
-    /// `SmokeTests`.
+    /// This label is a contract with the UI tests — it is the most reliable way
+    /// to read the active state from outside the process. Change the wording
+    /// here and `SmokeTests` has to change with it.
     private var accessibilityLabel: Text {
         switch mode {
         case .off:
-            Text("Đang tắt")
+            Text("Off")
         case .indefinite:
-            Text("Đang bật, không giới hạn")
+            Text("On, indefinitely")
         case .countdown:
-            // Mốc kết thúc thay vì thời gian còn lại: chính xác hơn khi đọc
-            // thành lời, và đứng yên suốt lần hẹn giờ.
-            Text("Đang bật, hẹn giờ tới \(endsAtLabel)")
+            // The end time rather than the time remaining: more precise when
+            // read aloud, and it holds still for the whole timer.
+            Text("On, timer until \(endsAtLabel)")
         }
     }
 

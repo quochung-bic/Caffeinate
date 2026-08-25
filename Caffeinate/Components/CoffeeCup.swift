@@ -1,41 +1,44 @@
 import SwiftUI
 
-/// Ly cà phê — phần tử trung tâm của app. Mực cà phê CHÍNH LÀ thanh tiến trình:
-/// đầy khi vừa bật, vơi dần theo thời gian còn lại, cạn khi hết giờ. Khói chỉ
-/// bốc khi đang thực sự giữ máy thức, nên nhìn một cái là biết app đang làm gì.
+/// The coffee cup — the app's central element. The coffee level IS the progress
+/// bar: full when you turn it on, draining with the time left, empty when the
+/// timer ends. Steam rises only while the Mac is genuinely being held awake, so
+/// one look tells you what the app is doing.
 ///
-/// Vẽ bằng `Canvas` thay vì ghép nhiều View: cả ly là một lớp vẽ duy nhất, mỗi
-/// khung hình khói chỉ tốn một lần vẽ chứ không phải một vòng cập nhật layout.
+/// Drawn with `Canvas` rather than composed from views: the whole cup is a
+/// single drawing layer, so each steam frame costs one draw pass instead of a
+/// layout update.
 struct CoffeeCup: View, Animatable {
-    /// 0...1. Phần ly còn cà phê.
+    /// 0...1. How much of the cup still holds coffee.
     var fill: Double
 
-    /// Cho SwiftUI nội suy mực cà phê: nhờ vậy lúc bật, cà phê được rót đầy
-    /// mượt mà thay vì hiện ra đột ngột.
+    /// Lets SwiftUI interpolate the coffee level, so turning on pours the cup
+    /// full smoothly instead of snapping to it.
     ///
-    /// `nonisolated` vì SwiftUI đọc/ghi animatableData ngoài main actor khi
-    /// chạy animation; bản thân nó chỉ đụng một `Double` nên không có tranh chấp.
+    /// `nonisolated` because SwiftUI reads and writes animatableData off the
+    /// main actor while animating; it only touches a `Double`, so there is no
+    /// race.
     nonisolated var animatableData: Double {
         get { fill }
         set { fill = newValue }
     }
     var isActive: Bool
-    /// Pha của khói, tính từ đồng hồ bên ngoài để cả app dùng chung một nhịp.
+    /// Steam phase, taken from an external clock so the whole app shares one beat.
     var steamPhase: Double
     var showSteam: Bool
     var size: CGFloat
 
     var body: some View {
         Canvas(rendersAsynchronously: false) { context, canvasSize in
-            // Vẽ trong hệ toạ độ 100×100 rồi mới thu phóng: mọi số đo hình học
-            // bên dưới đọc được như một bản vẽ kỹ thuật, không phụ thuộc size.
+            // Draw in a 100×100 space and scale afterwards: every measurement
+            // below reads like a technical drawing and is independent of size.
             context.scaleBy(x: canvasSize.width / 100, y: canvasSize.height / 100)
             draw(in: &context)
         }
         .frame(width: size, height: size)
     }
 
-    // MARK: - Hình học của ly (hệ toạ độ 100×100)
+    // MARK: - Cup geometry (100×100 coordinate space)
 
     private static let rimY: CGFloat = 32
     private static let baseY: CGFloat = 74
@@ -43,8 +46,9 @@ struct CoffeeCup: View, Animatable {
     private static let baseHalfWidth: CGFloat = 22
     private static let rimEllipseHeight: CGFloat = 7
 
-    /// Nửa bề rộng lòng ly tại độ cao y — thành ly thuôn nên mặt cà phê phải
-    /// hẹp dần khi vơi xuống, nếu vẽ ellipse cố định sẽ lòi ra ngoài thành.
+    /// Half-width of the cup's interior at height y. The wall tapers, so the
+    /// coffee surface has to narrow as the level drops — a fixed ellipse would
+    /// poke out through the side.
     private static func halfWidth(atY y: CGFloat) -> CGFloat {
         let t = (y - rimY) / (baseY - rimY)
         return rimHalfWidth + (baseHalfWidth - rimHalfWidth) * t
@@ -63,7 +67,7 @@ struct CoffeeCup: View, Animatable {
         return path
     }
 
-    // MARK: - Vẽ
+    // MARK: - Drawing
 
     private func draw(in context: inout GraphicsContext) {
         let outline: Color = isActive ? .primary : .secondary
@@ -83,8 +87,9 @@ struct CoffeeCup: View, Animatable {
         let level = min(max(fill, 0), 1)
         guard level > 0.001 else { return }
 
-        // Mặt cà phê chạy từ đáy lòng ly lên tới ngay dưới vành — chừa 6 đơn
-        // vị để khi đầy vẫn thấy thành ly, không bị "tràn tới miệng".
+        // The surface runs from the bottom of the interior up to just below
+        // the rim — 6 units of headroom so a full cup still shows its wall
+        // rather than looking filled to the brim.
         let top = Self.baseY - level * (Self.baseY - (Self.rimY + 6))
         let halfWidth = Self.halfWidth(atY: top)
 
@@ -99,8 +104,8 @@ struct CoffeeCup: View, Animatable {
             )
         )
 
-        // Ellipse mặt thoáng: thứ duy nhất nói cho mắt biết đây là chất lỏng
-        // nhìn hơi chếch từ trên, chứ không phải một khối màu bị cắt ngang.
+        // The surface ellipse is the only thing telling the eye this is liquid
+        // seen slightly from above, rather than a block of colour cut flat.
         let surfaceRect = CGRect(
             x: 50 - halfWidth, y: top - 2.6,
             width: halfWidth * 2, height: 5.2
@@ -143,8 +148,9 @@ struct CoffeeCup: View, Animatable {
     }
 
     private func drawSaucer(_ context: inout GraphicsContext, color: Color) {
-        // Cắt bỏ phần đĩa nằm sau ly. Ly là nét rỗng nên nếu vẽ nguyên vòng
-        // ellipse thì đĩa xuyên qua thân ly, trông như dây thay vì như đĩa.
+        // Clip away the part of the saucer behind the cup. The cup is an open
+        // outline, so a full ellipse would run straight through its body and
+        // read as a wire rather than a saucer.
         var saucer = context
         saucer.clip(to: Self.cupSilhouette, options: .inverse)
         saucer.stroke(
@@ -154,8 +160,9 @@ struct CoffeeCup: View, Animatable {
         )
     }
 
-    /// Ba sợi khói lệch pha nhau, uốn theo hình sin và loe rộng khi lên cao —
-    /// khói bốc thẳng đều nhau trông như hàng rào, không giống hơi nóng.
+    /// Three wisps out of phase with each other, curving along a sine and
+    /// spreading as they rise — steam going straight up in step looks like a
+    /// picket fence, not like heat.
     private func drawSteam(_ context: inout GraphicsContext) {
         let wisps: [(x: CGFloat, amplitude: CGFloat, offset: Double)] = [
             (38, 3.4, 0), (50, 4.2, 2.1), (62, 3.0, 4.2),
@@ -163,8 +170,8 @@ struct CoffeeCup: View, Animatable {
 
         for wisp in wisps {
             let localPhase = steamPhase + wisp.offset
-            // Mỗi sợi trôi lên rồi mờ hẳn, xong lặp lại — dùng phần thập phân
-            // của pha làm "tuổi đời" của sợi khói.
+            // Each wisp drifts up, fades out and repeats — the fractional part
+            // of the phase acts as the wisp's age.
             let age = localPhase.truncatingRemainder(dividingBy: 1)
             let rise = CGFloat(age) * 8
 
@@ -180,8 +187,9 @@ struct CoffeeCup: View, Animatable {
                 }
             }
 
-            // Đậm ở gốc, tan dần lên đỉnh; thêm envelope theo tuổi để sợi khói
-            // hiện ra và biến mất mượt chứ không nhảy khi lặp lại.
+            // Dense at the base, dissolving toward the top; the age envelope
+            // makes each wisp appear and vanish smoothly instead of jumping
+            // when it loops.
             let envelope = sin(age * .pi)
             context.stroke(
                 path,
@@ -200,8 +208,9 @@ struct CoffeeCup: View, Animatable {
 }
 
 extension Color {
-    /// Bảng màu cà phê. Chỉ dùng cho chất lỏng và khói — mọi thứ khác trong app
-    /// vẫn là màu hệ thống, để ly là điểm nhấn duy nhất có màu riêng.
+    /// The coffee palette. Used only for the liquid and the steam — everything
+    /// else in the app stays system-coloured, so the cup is the one element
+    /// with a colour of its own.
     static let cupEspresso = Color(red: 0.20, green: 0.11, blue: 0.07)
     static let cupBrew = Color(red: 0.42, green: 0.23, blue: 0.13)
     static let cupCrema = Color(red: 0.80, green: 0.56, blue: 0.32)

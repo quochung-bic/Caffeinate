@@ -1,38 +1,39 @@
 import SwiftUI
 import AppKit
 
-/// Tab tĩnh: không đọc, không sửa state. Giải thích app làm gì và những chỗ dễ
-/// hiểu nhầm.
+/// A static tab: reads no state and changes none. Explains what the app does
+/// and the parts that are easy to misread.
 struct AboutSettingsView: View {
-    @Environment(\.locale) private var locale
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
 
-                section("Dùng thế nào") {
-                    bullet("Bấm icon ly cà phê trên thanh menu để mở bảng điều khiển.")
-                    bullet("Chọn một mốc thời gian — hết giờ là máy tự trở về bình thường.")
-                    bullet("Chọn \"Không giới hạn\" nếu chưa biết cần bao lâu.")
-                    bullet("Bấm \"Tắt\" để dừng ngay, kể cả khi đang có luật tự động chạy.")
+                section("How to use it") {
+                    bullet("Click the coffee cup in the menu bar to open the control panel.")
+                    bullet("Pick a duration — when it runs out, your Mac goes back to normal on its own.")
+                    bullet("Choose \"Indefinite\" when you don’t know how long you’ll need it.")
+                    bullet("Click \"Stop\" to end it right away, even while an automatic rule is running.")
                 }
 
-                section("Mực cà phê là thanh tiến trình") {
+                section("The coffee level is the progress bar") {
                     paragraph("""
-                        Ly đầy khi vừa bật và vơi dần theo đồng hồ đếm ngược. Cùng \
-                        một hình đó thu nhỏ thành icon trên thanh menu, nên liếc \
-                        một cái là biết còn bao lâu mà không cần mở gì.
+                        The cup is full the moment you turn it on and drains as \
+                        the countdown runs. The same shape, shrunk down, is the \
+                        menu bar icon — so one glance tells you how much is left \
+                        without opening anything.
                         """)
                 }
 
-                section("Khi hết giờ") {
+                section("When the timer runs out") {
                     paragraph("""
-                        Caffeinate báo bằng ba đường độc lập — banner thông báo, \
-                        một tiếng chuông, và icon nhấp nháy — vì đường nào cũng có \
-                        lúc câm: banner bị Do Not Disturb chặn, âm thanh vô nghĩa \
-                        khi tai nghe ở phòng khác, còn icon thì chỉ thấy nếu đang \
-                        nhìn lên thanh menu.
+                        Caffeinate tells you three independent ways — a \
+                        notification banner, one chime, and a blinking menu bar \
+                        icon — because any single one of them can go silent: \
+                        banners get blocked by Do Not Disturb, sound is useless \
+                        when your headphones are in another room, and the icon \
+                        only helps if you happen to be looking at the menu bar.
                         """)
                 }
 
@@ -53,9 +54,9 @@ struct AboutSettingsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Caffeinate")
                     .font(.title2.bold())
-                Text("Giữ cho máy khỏi ngủ, khi nào bạn muốn.")
+                Text("Keeps your Mac awake, for exactly as long as you want.")
                     .foregroundStyle(.secondary)
-                Self.versionResource.text(in: locale)
+                Text(Self.versionText)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .textSelection(.enabled)
@@ -69,13 +70,13 @@ struct AboutSettingsView: View {
             .foregroundStyle(.tertiary)
     }
 
-    /// Đọc từ bundle chứ không viết cứng: một số phiên bản chép tay trong mã là
-    /// một số phiên bản sớm muộn cũng sai.
-    private static var versionResource: LocalizedStringResource {
+    /// Read from the bundle rather than hard-coded: a version number copied by
+    /// hand into source is a version number that eventually goes stale.
+    private static var versionText: String {
         let info = Bundle.main.infoDictionary ?? [:]
         let short = info["CFBundleShortVersionString"] as? String ?? "?"
         let build = info["CFBundleVersion"] as? String ?? "?"
-        return "Phiên bản \(short) (\(build))"
+        return "Version \(short) (\(build))"
     }
 
     private func section(

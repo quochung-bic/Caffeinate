@@ -1,64 +1,34 @@
 import SwiftUI
 import CaffeinateKit
 
-/// "Chung" — ngôn ngữ giao diện, bốn cờ giữ thức, và mốc thời lượng tuỳ chỉnh.
+/// "General" — the four keep-awake flags and the custom duration.
 struct GeneralSettingsView: View {
     @Bindable var controller: CaffeineController
-    @Bindable var language: LanguagePreference
-
-    @Environment(\.locale) private var locale
 
     var body: some View {
         Form {
             Section {
-                Picker(selection: $language.selection) {
-                    Text("Theo hệ thống").tag(AppLanguage.system)
-                    // Tên ngôn ngữ luôn viết bằng chính ngôn ngữ đó, không dịch.
-                    // Người đang lạc trong một giao diện họ không đọc được vẫn
-                    // phải nhận ra dòng dẫn họ về nhà.
-                    Text(verbatim: "Tiếng Việt").tag(AppLanguage.vietnamese)
-                    Text(verbatim: "English").tag(AppLanguage.english)
-                } label: {
-                    Text("Ngôn ngữ")
-                }
-                // Nhãn của `Picker`/`Toggle`/`Stepper` trong Form trên macOS
-                // được vẽ như một dòng chữ RIÊNG cạnh control, chứ không gắn
-                // vào chính control. Hệ quả: VoiceOver đọc "pop up button,
-                // Theo hệ thống" mà không nói được đó là cái gì. Phải gắn tay.
-                .accessibilityLabel(Text("Ngôn ngữ"))
-            } header: {
-                Text("Giao diện")
-            } footer: {
-                Text("""
-                    Giao diện đổi ngay. Các hộp thoại do macOS vẽ hộ — chọn app, \
-                    xin quyền thông báo — sẽ đổi từ lần mở app sau.
-                    """)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Section {
                 ForEach(AssertionFlags.all, id: \.rawValue) { flag in
                     Toggle(isOn: binding(for: flag)) {
                         VStack(alignment: .leading, spacing: 2) {
-                            flag.localizedName.text(in: locale)
-                            flag.localizedExplanation.text(in: locale)
+                            Text(flag.displayName)
+                            Text(flag.explanation)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    // Nhãn dựng bằng `VStack` không trở thành nhãn trợ năng của
-                    // công tắc — nó chỉ là hình vẽ. Không gắn tay thì VoiceOver
-                    // đọc bốn công tắc giống hệt nhau: "switch, on".
-                    .accessibilityLabel(flag.localizedName.text(in: locale))
-                    .accessibilityHint(flag.localizedExplanation.text(in: locale))
+                    // A label built from a `VStack` does not become the switch's
+                    // accessibility label — it is only artwork. Without setting
+                    // it by hand, VoiceOver reads all four switches identically:
+                    // "switch, on".
+                    .accessibilityLabel(Text(flag.displayName))
+                    .accessibilityHint(Text(flag.explanation))
                 }
             } header: {
-                Text("Khi Caffeinate bật, giữ những gì")
+                Text("What to hold while Caffeinate is on")
             } footer: {
-                Text("Mặc định chỉ giữ hệ thống. Đó thường là thứ duy nhất bạn cần.")
+                Text("System only, by default. That’s usually the only one you need.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -68,17 +38,20 @@ struct GeneralSettingsView: View {
                         in: Settings.durationRange,
                         step: 5) {
                     LabeledContent {
-                        Text("\(controller.settings.customDurationMinutes) phút")
+                        Text(Plural.minutes(controller.settings.customDurationMinutes))
                             .monospacedDigit()
                     } label: {
-                        Text("Thời lượng tuỳ chỉnh")
+                        Text("Custom duration")
                     }
                 }
-                .accessibilityLabel(Text("Thời lượng tuỳ chỉnh"))
+                // A `Stepper` label inside a Form on macOS is drawn as its own
+                // run of text beside the control rather than attached to it, so
+                // VoiceOver announces the control with no name. Set it by hand.
+                .accessibilityLabel(Text("Custom duration"))
             } header: {
-                Text("Hẹn giờ")
+                Text("Timer")
             } footer: {
-                Text("Mốc này xuất hiện thành nút thứ tư trên panel, cạnh 15p / 30p / 1h.")
+                Text("This shows up as the fourth button in the panel, next to 15m / 30m / 1h.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

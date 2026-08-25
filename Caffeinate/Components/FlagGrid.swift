@@ -1,15 +1,13 @@
 import SwiftUI
 import CaffeinateKit
 
-/// Bốn chấm trạng thái. Đặc = đang thực sự giữ assertion đó.
+/// Four status dots. Filled means that assertion is genuinely held.
 ///
-/// Hiển thị cả cờ đang tắt chứ không chỉ cờ đang bật: người dùng cần thấy toàn
-/// cảnh để biết mình đang KHÔNG giữ gì, chứ không phải đoán từ một danh sách
-/// rút gọn.
+/// Flags that are off are shown too, not just the ones that are on: the user
+/// needs the full picture to know what is NOT being held, rather than inferring
+/// it from a shortened list.
 struct FlagGrid: View {
     let effectiveFlags: AssertionFlags
-
-    @Environment(\.locale) private var locale
 
     private let columns = [
         GridItem(.flexible(), alignment: .leading),
@@ -27,7 +25,7 @@ struct FlagGrid: View {
     private func indicator(for flag: AssertionFlags) -> some View {
         let isOn = effectiveFlags.contains(flag)
         return Label {
-            flag.localizedName.text(in: locale)
+            Text(flag.displayName)
                 .foregroundStyle(isOn ? .primary : .secondary)
         } icon: {
             Image(systemName: isOn ? "circle.fill" : "circle")
@@ -37,7 +35,7 @@ struct FlagGrid: View {
         .font(.callout)
         .animation(.easeInOut(duration: 0.15), value: isOn)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(flag.localizedName.text(in: locale))
-        .accessibilityValue(isOn ? Text("đang giữ") : Text("không giữ"))
+        .accessibilityLabel(Text(flag.displayName))
+        .accessibilityValue(isOn ? Text("held") : Text("not held"))
     }
 }

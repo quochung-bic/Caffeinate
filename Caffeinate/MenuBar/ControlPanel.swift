@@ -2,12 +2,13 @@ import SwiftUI
 import AppKit
 import CaffeinateKit
 
-/// Panel hiện ra khi bấm icon trên thanh menu — và là giao diện chính của app.
+/// The panel that appears when the menu bar icon is clicked — and the app's
+/// primary interface.
 ///
-/// Chỉ chứa thứ dùng thường xuyên: đang còn bao lâu, chọn thời lượng, tắt.
-/// Mọi cấu hình sâu nằm ở cửa sổ Cài đặt. Ranh giới này là có chủ đích: panel
-/// phải đọc xong trong một cái liếc, nên mỗi mục thêm vào đây là một mục làm
-/// chậm cái liếc đó.
+/// It holds only what gets used often: how long is left, pick a duration, stop.
+/// Deeper configuration lives in the Settings window. That boundary is
+/// deliberate: the panel has to be readable at a glance, so every item added
+/// here is an item that slows the glance down.
 struct ControlPanel: View {
     @Bindable var controller: CaffeineController
     let expiryAlert: TimerExpiryAlert
@@ -46,22 +47,22 @@ struct ControlPanel: View {
         .padding(12)
         .frame(width: 288)
         .onAppear {
-            // Mở panel nghĩa là người dùng đã thấy rồi; icon không cần nhấp
-            // nháy đòi chú ý nữa.
+            // Opening the panel means the user has seen it; the icon no longer
+            // needs to flash for attention.
             expiryAlert.cancelFlashing()
         }
     }
 
-    /// Nút thật, không phải chữ xanh: hai hành động này rời khỏi panel (mở cửa
-    /// sổ, thoát app) nên phải trông bấm được và có vùng bấm rộng như mọi nút
-    /// khác trong panel.
+    /// Real buttons, not blue text: both actions leave the panel (open a
+    /// window, quit the app), so they have to look clickable and carry as large
+    /// a hit target as every other button here.
     private var footer: some View {
         HStack(spacing: 6) {
             Button {
                 dismiss()
                 showSettings()
             } label: {
-                Label("Cài đặt…", systemImage: "gearshape")
+                Label("Settings…", systemImage: "gearshape")
                     .frame(maxWidth: .infinity)
             }
             .keyboardShortcut(",", modifiers: .command)
@@ -69,7 +70,7 @@ struct ControlPanel: View {
             Button {
                 NSApplication.shared.terminate(nil)
             } label: {
-                Label("Thoát", systemImage: "power")
+                Label("Quit", systemImage: "power")
                     .frame(maxWidth: .infinity)
             }
             .keyboardShortcut("q", modifiers: .command)
@@ -78,23 +79,22 @@ struct ControlPanel: View {
         .controlSize(.regular)
     }
 
-    /// App chạy ở chế độ phụ trợ (không có icon Dock), nên mở cửa sổ thôi là
-    /// chưa đủ — phải tự đưa app lên trước, nếu không cửa sổ Cài đặt sẽ hiện ra
-    /// sau lưng ứng dụng đang dùng và người dùng tưởng nút không ăn.
+    /// The app runs as an accessory (no Dock icon), so opening the window is
+    /// not enough — it has to bring itself to the front, otherwise the Settings
+    /// window appears behind whatever the user is working in and the button
+    /// looks broken.
     private func showSettings() {
         NSApplication.shared.activate(ignoringOtherApps: true)
         openSettings()
     }
 }
 
-/// Gom "đang giữ gì" và "vì sao đang bật" vào một khối có nền, thay vì để hai
-/// nhóm trôi tự do giữa các khoảng trắng.
+/// Groups "what is being held" and "why it is on" into one backed block,
+/// instead of letting two clusters float in whitespace.
 private struct StatusCard: View {
     let effectiveFlags: AssertionFlags
     let reason: ActiveReason?
     let failure: AssertionFailure?
-
-    @Environment(\.locale) private var locale
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -103,7 +103,7 @@ private struct StatusCard: View {
             if let reason {
                 Divider()
                 Label {
-                    reason.localizedDescription.text(in: locale)
+                    Text(reason.displayText)
                 } icon: {
                     Image(systemName: reason.symbolName)
                 }
@@ -114,8 +114,7 @@ private struct StatusCard: View {
             if let failure {
                 Divider()
                 Label {
-                    failure.localizedMessage(in: locale)
-                        .text(in: locale)
+                    Text(failure.message)
                         .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: "exclamationmark.triangle.fill")

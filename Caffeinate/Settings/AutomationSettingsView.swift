@@ -1,40 +1,42 @@
 import SwiftUI
 import CaffeinateKit
 
-/// "Tự động" — ba luật bật/tắt độc lập.
+/// "Automatic" — three independent on/off rules.
 struct AutomationSettingsView: View {
     @Bindable var controller: CaffeineController
 
     var body: some View {
         Form {
             Section {
-                // `.accessibilityLabel` trên MỌI Toggle trong cửa sổ này là
-                // bắt buộc, kể cả khi nhãn đã khai báo bằng chuỗi thuần: trong
-                // `Form` trên macOS, nhãn được vẽ thành một dòng chữ riêng cạnh
-                // công tắc chứ không gắn vào công tắc, nên VoiceOver đọc ra
-                // toàn "switch, off" không phân biệt được cái nào với cái nào.
-                Toggle("Một app trong danh sách đang chạy",
+                // `.accessibilityLabel` on EVERY Toggle in this window is
+                // mandatory, even where the label is already a plain string: in
+                // a `Form` on macOS the label is drawn as its own run of text
+                // beside the switch rather than attached to it, so VoiceOver
+                // reads them all as "switch, off" with nothing to tell them
+                // apart.
+                Toggle("An app from the list is running",
                        isOn: $controller.settings.appTriggerEnabled)
-                    .accessibilityLabel(Text("Một app trong danh sách đang chạy"))
+                    .accessibilityLabel(Text("An app from the list is running"))
 
                 AppTriggerList(bundleIDs: $controller.settings.triggerAppBundleIDs)
                     .disabled(!controller.settings.appTriggerEnabled)
             } header: {
-                Text("Tự bật khi")
+                Text("Turn on automatically when")
             }
 
             Section {
-                Toggle("Đang cắm sạc",
+                Toggle("Plugged into power",
                        isOn: $controller.settings.chargingTriggerEnabled)
-                    .accessibilityLabel(Text("Đang cắm sạc"))
-                Toggle("Có màn hình ngoài",
+                    .accessibilityLabel(Text("Plugged into power"))
+                Toggle("An external display is connected",
                        isOn: $controller.settings.externalDisplayTriggerEnabled)
-                    .accessibilityLabel(Text("Có màn hình ngoài"))
+                    .accessibilityLabel(Text("An external display is connected"))
             } footer: {
                 Text("""
-                    Nút Tắt luôn thắng: nó gỡ cả những luật đang đúng. Một luật \
-                    chỉ bật lại khi điều kiện của nó thật sự tái diễn — rút sạc \
-                    rồi cắm lại, chứ không phải vài giây sau đó.
+                    Stop always wins: it clears even the rules that are \
+                    currently true. A rule only comes back when its condition \
+                    genuinely happens again — unplug and plug back in, not a \
+                    few seconds later.
                     """)
                     .font(.caption)
                     .foregroundStyle(.secondary)

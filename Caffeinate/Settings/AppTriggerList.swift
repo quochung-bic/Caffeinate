@@ -2,11 +2,12 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// Danh sách app kích hoạt.
+/// The list of trigger apps.
 ///
-/// App đã bị gỡ khỏi máy vẫn nằm lại trong danh sách, chỉ hiện mờ. Tự động xoá
-/// nghe có vẻ gọn nhưng nó phá dữ liệu của người dùng: một ổ đĩa ngoài chưa gắn
-/// hay một app tạm thời chưa cài lại cũng đủ để cấu hình biến mất không dấu vết.
+/// An app that has been removed from the Mac stays in the list, just dimmed.
+/// Pruning automatically sounds tidy but destroys the user's data: an external
+/// drive that is not mounted yet, or an app not reinstalled yet, would be
+/// enough to make the configuration vanish without trace.
 struct AppTriggerList: View {
     @Binding var bundleIDs: [String]
 
@@ -18,7 +19,7 @@ struct AppTriggerList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if bundleIDs.isEmpty {
-                Text("Chưa có app nào. Thêm app để Caffeinate tự bật khi app đó chạy.")
+                Text("No apps yet. Add one and Caffeinate turns on whenever it’s running.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -33,8 +34,8 @@ struct AppTriggerList: View {
             }
 
             HStack {
-                Button("Thêm app…") { isPickingFile = true }
-                Button("Xoá") {
+                Button("Add app…") { isPickingFile = true }
+                Button("Remove") {
                     bundleIDs.removeAll { selection.contains($0) }
                     selection.removeAll()
                 }
@@ -67,13 +68,13 @@ struct AppTriggerList: View {
             }
         } else {
             Label {
-                Text("\(id) — không tìm thấy")
+                Text("\(id) — not found")
                     .foregroundStyle(.secondary)
             } icon: {
                 Image(systemName: "questionmark.app.dashed")
                     .foregroundStyle(.secondary)
             }
-            .accessibilityLabel(Text("\(id), không tìm thấy trên máy"))
+            .accessibilityLabel(Text("\(id), not found on this Mac"))
         }
     }
 }

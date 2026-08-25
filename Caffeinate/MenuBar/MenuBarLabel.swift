@@ -1,36 +1,33 @@
 import SwiftUI
 import CaffeinateKit
 
-/// Icon trên thanh menu.
+/// The menu bar icon.
 ///
-/// # Vì sao ở đây không có `TimelineView`
+/// # Why there is no `TimelineView` here
 ///
-/// Nhãn của `MenuBarExtra` không phải một view bình thường: SwiftUI kết xuất nó
-/// vào một `NSStatusItem`, và trong khung đó `TimelineView` KHÔNG chạy nhịp.
-/// Đã đo, không phải suy đoán: trong 8 giây đang đếm ngược, một nhãn dựng bằng
-/// `TimelineView(.periodic(by: 1))` chỉ được vẽ lại 2 lần, cả hai đều do trạng
-/// thái đổi. Icon đứng im ở mức đầy suốt lần hẹn giờ — mất hẳn thứ khiến nó
-/// đáng có mặt trên thanh menu.
+/// A `MenuBarExtra` label is not an ordinary view: SwiftUI renders it into an
+/// `NSStatusItem`, and inside that frame `TimelineView` does NOT tick.
+/// Measured, not guessed — over eight seconds of an active countdown, a label
+/// built on `TimelineView(.periodic(by: 1))` redrew twice, both times because
+/// state changed. The icon sat at full for the whole timer, losing the one
+/// thing that earns it a place on the menu bar.
 ///
-/// Cách đáng tin duy nhất để nhãn vẽ lại là đọc một thuộc tính `@Observable`
-/// thật sự thay đổi: `controller.now`, do controller đánh nhịp và chỉ chạy khi
-/// có hẹn giờ. Ngoài lúc đếm ngược, view này không đọc `now` nên không có phụ
-/// thuộc nào theo thời gian — nó chỉ vẽ lại khi trạng thái đổi.
+/// The only reliable way to make the label redraw is to read an `@Observable`
+/// property that genuinely changes: `controller.now`, ticked by the controller
+/// and running only while a timer exists. Outside a countdown this view never
+/// reads `now`, so it has no time-based dependency at all — it redraws only
+/// when state changes.
 struct MenuBarLabel: View {
     let controller: CaffeineController
     let expiryAlert: TimerExpiryAlert
-    /// Nhãn này nằm ngoài mọi scene nên không có `\.locale` để dựa vào; nó đọc
-    /// thẳng lựa chọn ngôn ngữ, và vì đó là `@Observable` nên đổi ngôn ngữ là
-    /// nhãn VoiceOver đổi theo ngay.
-    let language: LanguagePreference
 
     var body: some View {
         Image(nsImage: nsImage(at: controller.isCountingDown ? controller.now : .now))
     }
 
     private func nsImage(at date: Date) -> NSImage {
-        let description = language.resolve(controller.iconAccessibilityDescription(at: date))
-        // Nhịp "tắt" của hiệu ứng nhấp nháy báo hết giờ.
+        let description = controller.iconAccessibilityDescription(at: date)
+        // The "off" beat of the expiry flash.
         if expiryAlert.isFlashing {
             return MenuBarIcon.blankImage(accessibilityDescription: description)
         }

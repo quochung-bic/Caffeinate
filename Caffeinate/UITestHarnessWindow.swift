@@ -1,18 +1,18 @@
 import AppKit
 import SwiftUI
 
-/// Cửa sổ chỉ tồn tại khi tiến trình được khởi chạy với cờ
+/// A window that exists only when the process is launched with
 /// `LaunchEnvironment.uiTestingArgument`.
 ///
-/// Vì sao cần nó: Caffeinate là app thanh menu, và panel của `MenuBarExtra` là
-/// một `NSPanel` do hệ thống quản lý — `XCUIApplication` không mở được nó bằng
-/// cách nào đủ ổn định để làm nền cho một bộ test. Không có cửa sổ nào thì
-/// `launch()` còn hỏng ngay từ đầu với "Failed to activate".
+/// Why it is needed: Caffeinate is a menu bar app, and a `MenuBarExtra` panel
+/// is a system-managed `NSPanel` — `XCUIApplication` cannot open it in any way
+/// stable enough to build a test suite on. With no window at all, `launch()`
+/// fails outright with "Failed to activate".
 ///
-/// Điều quan trọng: cửa sổ này KHÔNG dựng một giao diện riêng cho test. Nó host
-/// đúng cái `ControlPanel` mà người dùng thật nhìn thấy, nên test vẫn đi qua
-/// đường dây thật (nút → CaffeineController → state) chứ không kiểm chứng một
-/// bản sao chỉ tồn tại lúc test.
+/// The important part: this window does NOT build a separate interface for
+/// tests. It hosts the very `ControlPanel` a real user sees, so the tests
+/// exercise the real path (button → CaffeineController → state) rather than
+/// verifying a copy that only exists under test.
 @MainActor
 final class UITestHarnessWindow {
     private let window: NSWindow
@@ -28,13 +28,15 @@ final class UITestHarnessWindow {
         let hosting = NSHostingView(rootView: content)
         window.contentView = hosting
 
-        // Co theo nội dung: panel rộng 288pt còn cửa sổ Cài đặt rộng 500pt, và
-        // một cửa sổ hẹp hơn nội dung sẽ cắt mất chính những control cần test.
+        // Size to the content: the panel is 288pt wide while the Settings
+        // window is 500pt, and a window narrower than its content would clip
+        // exactly the controls under test.
         //
-        // Kẹp sàn lại: ngay sau khi gán, `fittingSize` có thể còn bằng 0 vì
-        // SwiftUI chưa chạy lượt bố cục nào. Đã vấp — cửa sổ ra 0×0, không
-        // control nào chạm tới được, và cả bộ test đỏ với thông báo "cửa sổ
-        // không hiện ra" trong khi nó có hiện, chỉ là rỗng.
+        // Clamp the floor: immediately after assignment `fittingSize` can still
+        // be zero, because SwiftUI has not run a layout pass yet. Learned the
+        // hard way — the window came out 0×0, no control could be reached, and
+        // the whole suite went red reporting "the window never appeared" when
+        // it had appeared, just empty.
         let fitting = hosting.fittingSize
         window.setContentSize(NSSize(
             width: max(fitting.width, 520),

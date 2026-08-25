@@ -1,100 +1,80 @@
 import XCTest
 
-/// Cửa sổ Cài đặt là một `Settings` scene mà XCUITest không mở được từ ngoài,
-/// nên trước đây nó không có test nào — và đúng chỗ ấy đã có một lỗi lọt qua:
-/// bốn công tắc cờ, picker ngôn ngữ và stepper thời lượng đều mang nhãn trợ
-/// năng RỖNG. Trong `Form` trên macOS, nhãn của những control này được vẽ thành
-/// một dòng chữ RIÊNG nằm cạnh chúng chứ không gắn vào chính control, nên
-/// VoiceOver đọc ra bốn công tắc giống hệt nhau: "switch, on".
+/// The Settings window is a `Settings` scene that XCUITest cannot open from
+/// outside, so it used to have no tests at all — and that is exactly where a
+/// bug slipped through: the four flag switches and the duration stepper all had
+/// EMPTY accessibility labels. In a `Form` on macOS, the label of such a control
+/// is drawn as its own run of text beside it rather than attached to it, so
+/// VoiceOver announced four identical switches: "switch, on".
 ///
-/// Bộ test lái cửa sổ đó qua `-CaffeinateUITestSurface settings`.
+/// These tests drive that window through `-CaffeinateUITestSurface settings`.
 ///
-/// Chỉ dùng truy vấn theo LOẠI CONTROL (`switches`, `popUpButtons`,
-/// `steppers`), không dùng `staticTexts`: truy vấn tập chữ trên cửa sổ này hết
-/// giờ chờ một cách ổn định. Điều đó cũng không mất mát gì — thứ đáng khẳng
-/// định ở đây là control có nhãn hay không, mà nhãn thì nằm trên control.
+/// They query by CONTROL TYPE only (`switches`, `popUpButtons`, `steppers`),
+/// never `staticTexts`: querying the text of this window times out reliably.
+/// Nothing is lost by that — what matters here is whether a control has a
+/// label, and the label lives on the control.
 @MainActor
 final class SettingsAccessibilityTests: XCTestCase {
 
-    private func launchSettings(language: String = "vi", locale: String = "vi_VN") -> XCUIApplication {
+    private func launchSettings() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
             "-CaffeinateUITesting",
             "-CaffeinateUITestSurface", "settings",
-            "-AppleLanguages", "(\(language))",
-            "-AppleLocale", locale,
         ]
         app.launch()
 
-        // Chờ cửa sổ có mặt trước khi truy vấn phần tử bên trong: lượt chụp cây
-        // trợ năng đầu tiên có thể rơi vào lúc chưa có cửa sổ nào, và nó không
-        // tự thử lại.
+        // Wait for the window before querying anything inside it: the first
+        // accessibility snapshot can land before any window exists, and it does
+        // not retry on its own.
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 15),
-                      "Cửa sổ Cài đặt phải hiện ra")
+                      "The Settings window should appear")
         return app
     }
 
-    /// Một control không có nhãn là một control mà người dùng VoiceOver không
-    /// dùng được. Kiểm tra theo lớp chứ không liệt kê từng cái: thêm một
-    /// `Toggle` mới mà quên nhãn thì test này đỏ ngay, không cần ai nhớ.
+    /// A control with no label is a control a VoiceOver user cannot use. Check
+    /// by class rather than listing them one by one: add a new `Toggle` without
+    /// a label and this test goes red without anyone having to remember.
     func testEveryControlHasAnAccessibilityLabel() {
         let app = launchSettings()
         XCTAssertTrue(app.switches.firstMatch.waitForExistence(timeout: 10),
-                      "Tab Chung phải có các công tắc cờ")
+                      "The General tab should have the flag switches")
 
-        // Đi qua từng tab: mỗi tab có control riêng, và tab nào không được mở
-        // ra thì nội dung của nó không nằm trong cây trợ năng để mà kiểm tra.
-        for tab in ["Chung", "Tự động", "Khởi động"] {
+        // Visit each tab: every tab has its own controls, and a tab that is not
+        // open has no content in the accessibility tree to check.
+        for tab in ["General", "Automatic", "Startup"] {
             let button = app.radioButtons[tab].firstMatch
-            XCTAssertTrue(button.waitForExistence(timeout: 5), "Thiếu tab \"\(tab)\"")
+            XCTAssertTrue(button.waitForExistence(timeout: 5), "Missing the \"\(tab)\" tab")
             button.click()
 
-            assertAllLabelled(app.switches, kind: "công tắc ở tab \(tab)")
-            assertAllLabelled(app.checkBoxes, kind: "checkbox ở tab \(tab)")
-            assertAllLabelled(app.popUpButtons, kind: "menu chọn ở tab \(tab)")
-            assertAllLabelled(app.steppers, kind: "stepper ở tab \(tab)")
+            assertAllLabelled(app.switches, kind: "switch on the \(tab) tab")
+            assertAllLabelled(app.checkBoxes, kind: "checkbox on the \(tab) tab")
+            assertAllLabelled(app.popUpButtons, kind: "pop-up button on the \(tab) tab")
+            assertAllLabelled(app.steppers, kind: "stepper on the \(tab) tab")
         }
 
         app.terminate()
     }
 
-    /// Bốn cờ giữ thức phải nhận ra được TỪNG CÁI qua nhãn trợ năng — không chỉ
-    /// "có nhãn" mà là nhãn đúng của riêng nó.
+    /// The four keep-awake flags have to be tellable APART by their labels — not
+    /// merely "has a label", but the right label for each one.
     func testHoldFlagsAreIndividuallyIdentifiable() {
         let app = launchSettings()
         XCTAssertTrue(app.switches.firstMatch.waitForExistence(timeout: 10))
 
-        for name in ["Hệ thống", "Màn hình", "Đĩa", "Idle"] {
-            XCTAssertTrue(toggleExists(app, labelled: name),
-                          "Không tìm thấy công tắc mang nhãn \"\(name)\"")
-        }
-        XCTAssertTrue(app.popUpButtons["Ngôn ngữ"].firstMatch.exists,
-                      "Picker ngôn ngữ phải mang nhãn của nó")
-        XCTAssertTrue(app.steppers["Thời lượng tuỳ chỉnh"].firstMatch.exists,
-                      "Stepper thời lượng phải mang nhãn của nó")
-
-        app.terminate()
-    }
-
-    /// Cửa sổ Cài đặt cũng phải đổi ngôn ngữ, không chỉ panel — kể cả nhãn trợ
-    /// năng, vì chúng được gắn tay nên rất dễ bị bỏ quên khi dịch.
-    func testSettingsWindowIsLocalized() {
-        let app = launchSettings(language: "en", locale: "en_US")
-        XCTAssertTrue(app.switches.firstMatch.waitForExistence(timeout: 10))
-
         for name in ["System", "Display", "Disk", "Idle"] {
             XCTAssertTrue(toggleExists(app, labelled: name),
-                          "Không tìm thấy công tắc mang nhãn tiếng Anh \"\(name)\"")
+                          "No switch found labelled \"\(name)\"")
         }
-        XCTAssertTrue(app.popUpButtons["Language"].firstMatch.exists)
-        XCTAssertFalse(app.popUpButtons["Ngôn ngữ"].firstMatch.exists,
-                       "Không được còn sót nhãn tiếng Việt")
+        XCTAssertTrue(app.steppers["Custom duration"].firstMatch.exists,
+                      "The duration stepper should carry its own label")
 
         app.terminate()
     }
 
-    /// macOS dựng `Toggle` trong Form thành `Switch` hay `CheckBox` tuỳ phiên
-    /// bản và tuỳ kiểu Form; chấp nhận cả hai thay vì khoá chặt vào một loại.
+    /// macOS renders a `Toggle` in a Form as either a `Switch` or a `CheckBox`
+    /// depending on the version and the Form style; accept both rather than
+    /// pinning to one.
     private func toggleExists(_ app: XCUIApplication, labelled label: String) -> Bool {
         app.switches[label].firstMatch.exists || app.checkBoxes[label].firstMatch.exists
     }
@@ -104,7 +84,7 @@ final class SettingsAccessibilityTests: XCTestCase {
             let element = query.element(boundBy: index)
             XCTAssertFalse(
                 element.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                "\(kind) thứ \(index) không có nhãn trợ năng (value=\(element.value ?? "nil"))"
+                "\(kind) at index \(index) has no accessibility label (value=\(element.value ?? "nil"))"
             )
         }
     }

@@ -1,42 +1,41 @@
 import SwiftUI
 import CaffeinateKit
 
-/// "Khởi động" — chạy cùng macOS, và có bật sẵn ngay khi chạy hay không.
+/// "Startup" — launch with macOS, and whether to turn on immediately.
 struct StartupSettingsView: View {
     @Bindable var controller: CaffeineController
     @State private var launchAtLogin = LaunchAtLogin()
-    @Environment(\.locale) private var locale
 
     var body: some View {
         Form {
             Section {
-                // Xem chú thích trong AutomationSettingsView: trong `Form` trên
-                // macOS, nhãn của Toggle không trở thành nhãn trợ năng của công
-                // tắc, nên phải gắn tay ở mọi chỗ.
-                Toggle("Khởi động cùng macOS", isOn: Binding(
+                // See the comment in AutomationSettingsView: in a `Form` on
+                // macOS a Toggle's label does not become the switch's
+                // accessibility label, so it has to be set by hand everywhere.
+                Toggle("Launch at login", isOn: Binding(
                     get: { launchAtLogin.isEnabled },
                     set: { launchAtLogin.setEnabled($0) }
                 ))
-                .accessibilityLabel(Text("Khởi động cùng macOS"))
+                .accessibilityLabel(Text("Launch at login"))
 
-                Toggle("Bật sẵn ngay khi app khởi chạy",
+                Toggle("Turn on as soon as the app starts",
                        isOn: $controller.settings.activateOnLaunch)
                     .disabled(!launchAtLogin.isEnabled)
-                    .accessibilityLabel(Text("Bật sẵn ngay khi app khởi chạy"))
+                    .accessibilityLabel(Text("Turn on as soon as the app starts"))
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
                     if !launchAtLogin.isEnabled {
-                        // Ràng buộc này phải nói ra: một tuỳ chọn bị mờ đi mà
-                        // không giải thích thì trông như lỗi.
+                        // This constraint has to be stated: an option greyed out
+                        // without explanation just looks broken.
                         Text("""
-                            Cần bật "Khởi động cùng macOS" trước — nếu app không \
-                            tự chạy lúc đăng nhập thì tuỳ chọn kia không có tác dụng.
+                            Turn on "Launch at login" first — if the app doesn’t \
+                            start when you log in, that option has no effect.
                             """)
                     }
 
                     if let error = launchAtLogin.lastError {
                         Label {
-                            error.text(in: locale)
+                            Text(error)
                         } icon: {
                             Image(systemName: "exclamationmark.triangle.fill")
                         }

@@ -1,47 +1,49 @@
 import SwiftUI
 import CaffeinateKit
 
-/// Cửa sổ Cài đặt — khung nhìn phụ, mở hay đóng không ảnh hưởng gì tới việc app
-/// có đang giữ máy thức hay không.
+/// The Settings window — a secondary view whose being open or closed has no
+/// bearing on whether the app is holding the Mac awake.
 ///
-/// Chia bốn tab thay vì một biểu mẫu dài: mỗi tab trả lời đúng một câu hỏi
-/// ("giữ cái gì", "khi nào tự bật", "chạy lúc nào", "app này là gì"), nên tìm
-/// một mục không cần cuộn qua những mục không liên quan.
+/// Four tabs rather than one long form: each tab answers exactly one question
+/// ("what does it hold", "when does it turn itself on", "when does it run",
+/// "what is this app"), so finding a setting never means scrolling past
+/// unrelated ones.
 struct SettingsView: View {
     @Bindable var controller: CaffeineController
-    @Bindable var language: LanguagePreference
 
-    /// Chiều rộng đủ để thanh tab luôn hiện thẳng ra. Hẹp hơn thì macOS 26 gộp
-    /// hết tab vào nút tràn "»", biến bốn tab thành một menu hai cấp.
+    /// Wide enough that the tab bar always lays out flat. Any narrower and
+    /// macOS 26 folds every tab into a "»" overflow button, turning four tabs
+    /// into a two-level menu.
     private static let width: CGFloat = 500
 
     var body: some View {
         TabView {
-            GeneralSettingsView(controller: controller, language: language)
-                .tabItem { Label("Chung", systemImage: "gearshape") }
+            GeneralSettingsView(controller: controller)
+                .tabItem { Label("General", systemImage: "gearshape") }
 
             AutomationSettingsView(controller: controller)
-                .tabItem { Label("Tự động", systemImage: "bolt") }
+                .tabItem { Label("Automatic", systemImage: "bolt") }
 
             StartupSettingsView(controller: controller)
-                .tabItem { Label("Khởi động", systemImage: "power") }
+                .tabItem { Label("Startup", systemImage: "power") }
 
             AboutSettingsView()
-                .tabItem { Label("Giới thiệu", systemImage: "info.circle") }
+                .tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: Self.width)
         .background(CloseWindowShortcut())
     }
 }
 
-/// App chạy ở chế độ phụ trợ nên không sở hữu thanh menu, và không có thanh
-/// menu thì cũng không có mục File > Close — tức ⌘W chết. Nút ẩn này gắn lại
-/// đúng phím tắt đó, vì một cửa sổ macOS đóng được bằng ⌘W là kỳ vọng cơ bản.
+/// The app runs as an accessory, so it does not own the menu bar — and with no
+/// menu bar there is no File > Close, which means ⌘W is dead. This hidden
+/// button puts that shortcut back, because closing a macOS window with ⌘W is a
+/// basic expectation.
 private struct CloseWindowShortcut: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        Button("Đóng cửa sổ") { dismiss() }
+        Button("Close window") { dismiss() }
             .keyboardShortcut("w", modifiers: .command)
             .frame(width: 0, height: 0)
             .opacity(0)

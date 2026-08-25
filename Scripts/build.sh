@@ -47,7 +47,7 @@ Options:
 Examples:
   Scripts/build.sh                     # Release build into ./build
   Scripts/build.sh --debug --clean     # a clean Debug build
-  Scripts/build.sh --test-only         # 69 unit tests + 9 UI tests
+  Scripts/build.sh --test-only         # 69 unit tests + 3 UI tests
 EOF
 }
 

@@ -2,21 +2,18 @@ import Foundation
 import Observation
 import ServiceManagement
 
-/// Bọc `SMAppService`.
+/// A wrapper around `SMAppService`.
 ///
-/// Không soi gương trạng thái vào UserDefaults: `SMAppService.mainApp.status`
-/// là nguồn sự thật duy nhất. Người dùng có thể tắt login item từ System
-/// Settings > General > Login Items mà app không hề hay biết — giữ một bản sao
-/// nghĩa là sớm muộn cũng hiển thị sai.
+/// The state is never mirrored into UserDefaults: `SMAppService.mainApp.status`
+/// is the single source of truth. The user can disable the login item from
+/// System Settings > General > Login Items without the app hearing about it, so
+/// keeping a copy would mean displaying something wrong sooner or later.
 @MainActor
 @Observable
 final class LaunchAtLogin {
-    /// Tài nguyên chuỗi, không phải `String` đã dựng: chỉ tầng view mới biết
-    /// người dùng đang chọn ngôn ngữ nào, và câu lỗi phải đổi theo cùng lúc với
-    /// phần còn lại của cửa sổ.
-    private(set) var lastError: LocalizedStringResource?
+    private(set) var lastError: String?
 
-    /// Đọc thẳng từ hệ thống mỗi lần, không cache.
+    /// Read straight from the system every time, never cached.
     var isEnabled: Bool {
         SMAppService.mainApp.status == .enabled
     }
@@ -34,20 +31,20 @@ final class LaunchAtLogin {
         }
     }
 
-    /// Nguyên nhân hay gặp nhất không phải là "hệ thống trục trặc" mà là app
-    /// đang chạy ngoài /Applications — `SMAppService` từ chối đăng ký những
-    /// bundle nằm ở chỗ khác. Nói thẳng ra điều đó, vì người dùng sửa được;
-    /// còn "thao tác thất bại" thì họ không làm gì được.
-    private static func explain(_ error: any Error, whileEnabling enabling: Bool) -> LocalizedStringResource {
+    /// The most common cause is not "the system went wrong" but the app running
+    /// from outside /Applications — `SMAppService` refuses to register a bundle
+    /// anywhere else. Say so plainly, because the user can fix that; "the
+    /// operation failed" leaves them nothing to act on.
+    private static func explain(_ error: any Error, whileEnabling enabling: Bool) -> String {
         let bundlePath = Bundle.main.bundlePath
         guard bundlePath.hasPrefix("/Applications") else {
             return """
-                Không đổi được cài đặt khởi động: app phải nằm trong thư mục \
-                /Applications. Hiện tại đang chạy từ \(bundlePath).
+                Couldn’t change the startup setting: the app must live in \
+                /Applications. It’s currently running from \(bundlePath).
                 """
         }
         return enabling
-            ? "Không bật được khởi động cùng macOS: \(error.localizedDescription)"
-            : "Không tắt được khởi động cùng macOS: \(error.localizedDescription)"
+            ? "Couldn’t turn on launch at login: \(error.localizedDescription)"
+            : "Couldn’t turn off launch at login: \(error.localizedDescription)"
     }
 }

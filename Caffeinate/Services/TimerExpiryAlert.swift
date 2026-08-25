@@ -2,37 +2,40 @@ import AppKit
 import Observation
 import UserNotifications
 
-/// Báo cho người dùng biết hẹn giờ đã hết bằng ba đường độc lập, vì mỗi đường
-/// đều có lúc câm: banner bị Do Not Disturb chặn hoặc người dùng từ chối quyền,
-/// âm thanh vô nghĩa khi đang đeo tai nghe ở phòng khác, icon nhấp nháy chỉ
-/// thấy nếu đang nhìn lên thanh menu.
+/// Tells the user the timer has finished, three independent ways, because each
+/// one can go silent on its own: a banner gets blocked by Do Not Disturb or
+/// refused permission, sound is meaningless when the headphones are in another
+/// room, and a flashing icon only helps if you happen to be looking at the menu
+/// bar.
 ///
-/// Banner cố tình KHÔNG kèm âm thanh: âm thanh do đây tự phát, nên dù banner có
-/// bị chặn hay không thì cũng đúng một tiếng chuông, không bao giờ hai.
+/// The banner deliberately carries NO sound: the chime is played here, so
+/// whether or not the banner is blocked there is exactly one chime, never two.
 @MainActor
 @Observable
 final class TimerExpiryAlert {
-    /// Bật/tắt liên tục trong lúc nhấp nháy; nhãn menu bar đọc để đổi icon.
+    /// Toggles while flashing; the menu bar label reads it to swap the icon.
     private(set) var isFlashing = false
 
     @ObservationIgnored private var flashTask: Task<Void, Never>?
-    /// Tăng mỗi lần bắt đầu một lượt nhấp nháy mới. Một Task đã bị bỏ không
-    /// được phép dọn dẹp thay cho lượt kế tiếp — nếu không, lượt cũ sẽ tắt cờ
-    /// `isFlashing` mà lượt mới vừa bật, và xoá luôn tham chiếu tới Task mới
-    /// khiến `cancelFlashing()` sau đó không huỷ được gì.
+    /// Incremented at the start of each new flashing run. An abandoned Task
+    /// must not clean up on behalf of the next one — otherwise the old run
+    /// clears the `isFlashing` flag the new one just set, and drops the
+    /// reference to the new Task so a later `cancelFlashing()` has nothing to
+    /// cancel.
     @ObservationIgnored private var flashGeneration = 0
     @ObservationIgnored private var authorizationRequested = false
     @ObservationIgnored private let presenter = ForegroundPresenter()
 
-    /// Số nhịp nhấp nháy. Không nhấp nháy vô hạn: một cái icon chớp mãi trên
-    /// thanh menu là phiền, mà thông tin thì đã truyền đạt xong từ lâu.
+    /// How many flashes. Not infinite: an icon blinking forever on the menu bar
+    /// is an irritation long after the message has landed.
     private static let flashCount = 6
     private static let flashInterval = Duration.milliseconds(280)
 
-    /// Xin quyền thông báo lúc người dùng bắt đầu lần hẹn giờ ĐẦU TIÊN, không
-    /// phải lúc khởi động: hỏi ngay khi người dùng vừa làm đúng cái việc sẽ dẫn
-    /// tới thông báo thì họ còn hiểu vì sao mình được hỏi. Hỏi lúc hết giờ thì
-    /// quá muộn — hộp thoại xin quyền hiện ra thay cho chính thông báo đó.
+    /// Ask for notification permission when the user starts their FIRST timer,
+    /// not at launch: asking right as they do the thing that leads to a
+    /// notification is the moment the request makes sense. Asking at expiry
+    /// would be too late — the permission dialog would appear instead of the
+    /// notification itself.
     func prepareForTimer() {
         guard !authorizationRequested else { return }
         authorizationRequested = true
@@ -41,23 +44,21 @@ final class TimerExpiryAlert {
         center.delegate = presenter
         center.requestAuthorization(options: [.alert]) { _, error in
             if let error {
-                // Không nuốt lỗi: không có banner thì vẫn còn âm thanh và icon
-                // nhấp nháy, nhưng phải thấy được lý do khi soi log.
-                NSLog("Caffeinate: xin quyền thông báo thất bại: %@", error.localizedDescription)
+                // Do not swallow it: without a banner there is still the chime
+                // and the flashing icon, but the reason has to be visible in
+                // the log.
+                NSLog("Caffeinate: notification authorization failed: %@", error.localizedDescription)
             }
         }
     }
 
-    /// `stillActive` = hết giờ nhưng một luật tự động vẫn đang giữ máy thức.
-    /// Nói đúng chuyện đang xảy ra thay vì báo cứng "máy sắp ngủ".
-    /// `language` phải truyền vào chứ không đọc từ đâu đó: thông báo được gửi
-    /// ngoài mọi view nên không có `\.locale` của environment để dựa vào, và
-    /// nếu lấy ngôn ngữ tiến trình thì banner sẽ nói một thứ tiếng còn giao
-    /// diện nói một thứ tiếng khác.
-    func fire(stillActive: Bool, language: LanguagePreference) {
+    /// `stillActive` means the timer ended but an automation rule is still
+    /// holding the Mac awake. Say what is actually happening rather than
+    /// asserting "your Mac can sleep now".
+    func fire(stillActive: Bool) {
         playSound()
         startFlashing()
-        postNotification(stillActive: stillActive, language: language)
+        postNotification(stillActive: stillActive)
     }
 
     func cancelFlashing() {
@@ -85,21 +86,19 @@ final class TimerExpiryAlert {
                 self?.isFlashing = false
                 try? await Task.sleep(for: Self.flashInterval)
             }
-            // Chỉ dọn nếu mình vẫn là lượt hiện hành.
+            // Only clean up if this is still the current run.
             guard let self, self.flashGeneration == generation else { return }
             self.isFlashing = false
             self.flashTask = nil
         }
     }
 
-    private func postNotification(stillActive: Bool, language: LanguagePreference) {
+    private func postNotification(stillActive: Bool) {
         let content = UNMutableNotificationContent()
-        content.title = language.resolve("Hết giờ")
-        content.body = language.resolve(
-            stillActive
-                ? "Hẹn giờ đã xong, nhưng một luật tự động vẫn đang giữ máy thức."
-                : "Caffeinate đã tắt. Máy có thể ngủ như bình thường."
-        )
+        content.title = "Time’s up"
+        content.body = stillActive
+            ? "The timer finished, but an automatic rule is still keeping your Mac awake."
+            : "Caffeinate turned off. Your Mac can sleep normally again."
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
@@ -108,22 +107,23 @@ final class TimerExpiryAlert {
         )
         UNUserNotificationCenter.current().add(request) { error in
             if let error {
-                NSLog("Caffeinate: gửi thông báo thất bại: %@", error.localizedDescription)
+                NSLog("Caffeinate: posting the notification failed: %@", error.localizedDescription)
             }
         }
     }
 }
 
-/// Mặc định macOS nuốt banner khi app đang ở tiền cảnh — hợp lý với app có cửa
-/// sổ, sai với app này: cửa sổ Cài đặt đang mở không có nghĩa là người dùng
-/// đang nhìn nó, và cũng chẳng có chỗ nào trong đó báo hết giờ.
+/// By default macOS suppresses banners while the app is in the foreground —
+/// sensible for an app with windows, wrong for this one: an open Settings
+/// window does not mean the user is looking at it, and nothing in there reports
+/// that the timer ended.
 private final class ForegroundPresenter: NSObject, UNUserNotificationCenterDelegate, Sendable {
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        // Không kèm .sound: tiếng chuông do TimerExpiryAlert tự phát, để dù
-        // banner có bị chặn cũng đúng một tiếng.
+        // No .sound: the chime comes from TimerExpiryAlert, so even a blocked
+        // banner leaves exactly one.
         [.banner, .list]
     }
 }
