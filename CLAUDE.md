@@ -19,10 +19,19 @@ Source, comments and documentation are **written in English**. Keep it that way.
 ./Scripts/install.sh          # --test, --destination DIR, --no-build, --help
 
 # core unit tests — 69 tests, under 0.2 s, no GUI needed. Run this first.
-swift test --package-path CaffeinateKit
+./Scripts/build.sh --unit-only
 
-# run one suite or a single test (matched against the English display names)
-swift test --package-path CaffeinateKit --filter 'CaffeineController'
+# the UI tests on their own — slow, takes over the screen
+./Scripts/build.sh --ui-only
+
+# both layers
+./Scripts/build.sh --test-only
+
+# one suite or a single test (matched against the English display names)
+./Scripts/build.sh -u -f 'CaffeineController'
+./Scripts/build.sh -U -f 'SettingsAccessibilityTests'
+
+# the same thing without the wrapper, when you need the raw tool
 swift test --package-path CaffeinateKit --filter 'timers'
 
 # build the app
@@ -46,6 +55,22 @@ lipo -info <path>/Caffeinate.app/Contents/MacOS/Caffeinate
 ```
 
 The finish line is always green: **69 unit tests + 3 UI tests, and no warnings**.
+
+Local `./Scripts/build.sh --test-only` is authoritative. The UI job in CI is
+advisory — a hosted runner has no physical display and nobody to dismiss a
+system prompt.
+
+Warnings are promoted to errors **in CI only**, where the toolchain is pinned.
+`Configs/*.xcconfig` deliberately does not set `-Werror`: a newer Xcode must not
+break someone's build over code they never touched.
+
+The two repositories share one `build.sh` body. Anything outside the marked
+config block at the top must stay byte-identical with `mymac`:
+
+```bash
+diff <(sed -n '/^# ---- END CONFIG/,$p' Scripts/build.sh) \
+     <(sed -n '/^# ---- END CONFIG/,$p' ../../quochung/mymac/Scripts/build.sh)
+```
 
 The three UI tests fall into two groups, and each says something different when
 it goes red:

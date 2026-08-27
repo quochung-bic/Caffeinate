@@ -165,7 +165,7 @@
 			};
 			buildConfigurationList = C0FF00000000000000000061 /* Build configuration list for PBXProject "Caffeinate" */;
 			compatibilityVersion = "Xcode 15.0";
-			developmentRegion = vi;
+			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,

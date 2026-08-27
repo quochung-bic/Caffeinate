@@ -177,10 +177,16 @@ Or open `Caffeinate.xcodeproj` in Xcode and press Run.
 ./Scripts/build.sh
 
 # 69 core unit tests — fast, no GUI needed
-swift test --package-path CaffeinateKit
+./Scripts/build.sh --unit-only
+
+# the 3 UI tests: smoke and accessibility labels (~1 minute, takes the screen)
+./Scripts/build.sh --ui-only
+
+# both layers
+./Scripts/build.sh --test-only
 
 # run one suite, or a single test
-swift test --package-path CaffeinateKit --filter 'CaffeineController'
+./Scripts/build.sh -u -f 'CaffeineController'
 
 # build the app
 xcodebuild -project Caffeinate.xcodeproj -scheme Caffeinate \
@@ -256,7 +262,6 @@ user rather than swallowed.
 - **Icon Composer's `.icon` format** for macOS 26. The current `.appiconset`
   renders correctly on macOS 14, 15 and 26, but does not pick up Tahoe's Liquid
   Glass treatment. That needs the Icon Composer GUI app.
-- **Continuous integration.**
 
 ---
 
