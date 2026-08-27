@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Reproduce a CI run locally with `CI=1 ./Scripts/build.sh --unit-only`.
+  # GitHub already sets CI=true; this states the intent.
+  CI: "1"
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # Warnings become errors HERE and nowhere else. The workflow pins the
+      # toolchain; a newer Xcode on a contributor's laptop must not break their
+      # build over code they never touched, which is why Configs/Base.xcconfig
+      # deliberately does not set -Werror.
+      - name: Build warnings-clean
+        run: swift build --package-path CaffeinateKit -c debug -Xswiftc -warnings-as-errors
+
+      - name: Unit tests
+        run: ./Scripts/build.sh --unit-only
+
+  app:
+    name: Universal binary
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # build.sh fails by itself if a Release build is not arm64 + x86_64.
+      - name: Build the app
+        run: ./Scripts/build.sh --release --quiet
+
+      - name: Report the architectures
+        run: lipo -info build/Caffeinate.app/Contents/MacOS/Caffeinate
+
+      - name: Verify the bundle is signed and well formed
+        run: codesign --verify --verbose=2 build/Caffeinate.app
+
+  ui:
+    name: UI tests (advisory)
+    runs-on: macos-15
+    timeout-minutes: 30
+    # Advisory, not a gate. A hosted runner has a virtual display at a fixed
+    # size and nobody to dismiss a system prompt. A red run here means
+    # "reproduce it locally", not "block the merge". Promote this to required
+    # once it has been green for a stretch.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Keep the screen awake
+        run: defaults -currentHost write com.apple.screensaver idleTime 0
+
+      - name: UI tests
+        run: ./Scripts/build.sh --ui-only
+
+      - name: Upload the result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcresult-ui-${{ github.run_id }}
+          path: build/DerivedData/TestResults.xcresult
+          if-no-files-found: ignore

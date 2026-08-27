@@ -1,66 +1,93 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
-# build.sh — build Caffeinate.app from the command line.
+# Builds Caffeinate.app into ./build, and for a Release build verifies that the
+# binary really is universal.
 #
-# Why this exists rather than calling xcodebuild directly:
+# The universal check is part of the build rather than a note on a checklist:
+# an arm64-only build runs perfectly on the machine that produced it and dies
+# for every Intel user.
 #
-#   1. Xcode's default derived data path is a hash under
-#      ~/Library/Developer/Xcode/DerivedData that differs per checkout, so
-#      "where is the .app" has no fixed answer. This script pins that location
-#      and copies the product somewhere predictable.
-#   2. A Release build MUST be universal, and this is a silent class of failure:
-#      an arm64-only build runs perfectly on the machine that produced it and
-#      dies for every Intel user. That check belongs in the build, not on a list
-#      someone has to remember.
-
 set -euo pipefail
 
 readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly PROJECT="${REPO_ROOT}/Caffeinate.xcodeproj"
+
+# ---- Repo configuration — the ONLY part that differs between the two repos ----
+readonly APP_NAME="Caffeinate"
 readonly SCHEME="Caffeinate"
+readonly PROJECT="${REPO_ROOT}/Caffeinate.xcodeproj"
+readonly PACKAGE_PATH="CaffeinateKit"
+readonly UI_TEST_TARGET="CaffeinateUITests"
+readonly INSTALL_ENV_VAR="CAFFEINATE_INSTALLING"
+readonly UNIT_FILTER_EXAMPLE="CaffeineController"
+
+install_hint() {
+    cat <<EOF
+
+Install:
+    ./Scripts/install.sh          # rebuild and place it in /Applications
+    cp -R "$1" /Applications/    # or copy it by hand
+
+Launch at login only works while the app lives in /Applications — that is an
+SMAppService requirement, not a preference.
+EOF
+}
+# ---- END CONFIG — everything below must be byte-identical in both repos ----
+
 readonly DERIVED_DATA="${REPO_ROOT}/build/DerivedData"
 
 configuration="Release"
 output_dir="${REPO_ROOT}/build"
-run_tests=false
+run_unit=false
+run_ui=false
 build_app=true
 do_clean=false
 quiet=false
-
-usage() {
-    cat <<'EOF'
-Usage: Scripts/build.sh [options]
-
-Builds Caffeinate.app, and for a Release build verifies that the binary really
-is universal (arm64 + x86_64).
-
-Options:
-  -d, --debug           Debug configuration, host architecture only (faster)
-  -r, --release         Release configuration, universal binary (default)
-  -t, --test            Run the full test suite before building
-  -T, --test-only       Run the tests and stop
-  -c, --clean           Delete derived data before building
-  -o, --output DIR      Where to put Caffeinate.app (default: ./build)
-  -q, --quiet           Show only warnings, errors and test results
-  -h, --help            Print this help
-
-Examples:
-  Scripts/build.sh                     # Release build into ./build
-  Scripts/build.sh --debug --clean     # a clean Debug build
-  Scripts/build.sh --test-only         # 69 unit tests + 3 UI tests
-EOF
-}
+filter=""
 
 log()  { printf '\033[1m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
+usage() {
+    cat <<EOF
+Usage: Scripts/build.sh [options]
+
+Builds ${APP_NAME}.app into ./build, and for a Release build verifies that the
+binary really is universal (arm64 + x86_64).
+
+Options:
+  -d, --debug            Debug configuration, host architecture only (faster)
+  -r, --release          Release configuration, universal binary (default)
+  -t, --test             Run every test, then build
+  -T, --test-only        Run every test and stop
+  -u, --unit-only        Run only the package unit tests and stop (fast, no GUI)
+  -U, --ui-only          Run only the UI tests and stop (takes over the screen)
+  -f, --filter PATTERN   Narrow the tests. Unit: a regex over test names.
+                         UI: Class, or Class/method.
+  -c, --clean            Delete derived data before building
+  -o, --output DIR       Where to put ${APP_NAME}.app (default: ./build)
+  -q, --quiet            Show only warnings, errors and test results
+  -h, --help             Print this help
+
+Examples:
+  Scripts/build.sh                              # Release build into ./build
+  Scripts/build.sh --debug --clean              # a clean Debug build
+  Scripts/build.sh --test-only                  # every test, then stop
+  Scripts/build.sh -u -f '${UNIT_FILTER_EXAMPLE}'
+  Scripts/build.sh -U -f 'SmokeTests'           # one UI test class
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -d|--debug)     configuration="Debug"; shift ;;
         -r|--release)   configuration="Release"; shift ;;
-        -t|--test)      run_tests=true; shift ;;
-        -T|--test-only) run_tests=true; build_app=false; shift ;;
+        -t|--test)      run_unit=true; run_ui=true; shift ;;
+        -T|--test-only) run_unit=true; run_ui=true; build_app=false; shift ;;
+        -u|--unit-only) run_unit=true; build_app=false; shift ;;
+        -U|--ui-only)   run_ui=true; build_app=false; shift ;;
+        -f|--filter)    [[ $# -ge 2 ]] || die "--filter needs a pattern"
+                        filter="$2"; shift 2 ;;
         -c|--clean)     do_clean=true; shift ;;
         -o|--output)    [[ $# -ge 2 ]] || die "--output needs a directory"
                         output_dir="$2"; shift 2 ;;
@@ -102,21 +129,32 @@ cd "${REPO_ROOT}"
 if [[ "${do_clean}" == true ]]; then
     log "Deleting derived data"
     rm -rf "${DERIVED_DATA}"
-    rm -rf "${REPO_ROOT}/CaffeinateKit/.build"
+    rm -rf "${REPO_ROOT}/${PACKAGE_PATH}/.build"
 fi
 
-if [[ "${run_tests}" == true ]]; then
+if [[ "${run_unit}" == true ]]; then
     # The package tests are the fast, deterministic layer — run them first so a
     # broken core goes red in a second rather than after a full app build.
-    log "Running the core unit tests (CaffeinateKit)"
-    swift test --package-path CaffeinateKit
+    log "Running the unit tests"
+    if [[ -n "${filter}" ]]; then
+        swift test --package-path "${PACKAGE_PATH}" --filter "${filter}"
+    else
+        swift test --package-path "${PACKAGE_PATH}"
+    fi
+fi
 
-    log "Running the UI tests (takes over the screen for about a minute)"
-    xcb -project "${PROJECT}" \
-        -scheme "${SCHEME}" \
-        -destination 'platform=macOS' \
-        -derivedDataPath "${DERIVED_DATA}" \
-        test
+if [[ "${run_ui}" == true ]]; then
+    log "Running the UI tests (takes over the screen)"
+    ui_args=(-project "${PROJECT}"
+             -scheme "${SCHEME}"
+             -destination 'platform=macOS'
+             -derivedDataPath "${DERIVED_DATA}"
+             -resultBundlePath "${DERIVED_DATA}/TestResults.xcresult")
+    if [[ -n "${filter}" ]]; then
+        ui_args+=(-only-testing:"${UI_TEST_TARGET}/${filter}")
+    fi
+    rm -rf "${DERIVED_DATA}/TestResults.xcresult"
+    xcb "${ui_args[@]}" test
 fi
 
 if [[ "${build_app}" != true ]]; then
@@ -145,6 +183,9 @@ final_app="${output_dir}/${SCHEME}.app"
 binary="${final_app}/Contents/MacOS/${SCHEME}"
 architectures="$(lipo -archs "${binary}")"
 
+# The whole point of supporting Intel is that a bundle built anywhere runs
+# everywhere, so the result is checked rather than assumed. An arm64-only build
+# runs perfectly on the machine that produced it and dies for every Intel user.
 if [[ "${configuration}" == "Release" ]]; then
     for arch in arm64 x86_64; do
         case " ${architectures} " in
@@ -167,14 +208,6 @@ fi
 
 # When install.sh calls in here it handles installation itself, and printing a
 # second way to install right before it does that would only confuse the reader.
-if [[ -z "${CAFFEINATE_INSTALLING:-}" ]]; then
-    cat <<EOF
-
-Install:
-    ./Scripts/install.sh          # rebuild and place it in /Applications
-    cp -R "${final_app}" /Applications/    # or copy it by hand
-
-Launch at login only works while the app lives in /Applications — that is an
-SMAppService requirement, not a preference.
-EOF
+if [[ -z "${!INSTALL_ENV_VAR:-}" ]]; then
+    install_hint "${final_app}"
 fi
