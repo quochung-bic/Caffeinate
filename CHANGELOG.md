@@ -7,6 +7,14 @@ versioned according to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Continuous integration.** Three jobs: unit tests, a universal-binary check,
+  and the UI tests. The UI job is advisory — a hosted runner has a virtual
+  display and nobody to dismiss a system prompt, so a red run there means
+  "reproduce it locally" rather than "block the merge".
+- **`--unit-only`, `--ui-only` and `--filter`** in `Scripts/build.sh`. The two
+  test layers cost seconds and minutes respectively, and `--test` ran them
+  together; `--filter` narrows either without having to remember whether that
+  layer wants a swift-testing regex or an `-only-testing:` path.
 - A standard macOS Settings window (⌘,) split into four tabs: General,
   Automatic, Startup, About. Closes with ⌘W.
 - `Scripts/GenerateAppIcon.swift` — generates the whole app icon set from code.
