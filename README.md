@@ -111,7 +111,10 @@ hangs off it.
 
 ## Installing
 
-There is no prebuilt release yet, so for now you build from source:
+There is no prebuilt release yet, so for now you build from source, which means
+you need **Xcode 16 or newer** installed first — the Command Line Tools on their
+own are not enough. It is free on the App Store; open it once after installing
+so it can finish setting itself up.
 
 ```bash
 git clone https://github.com/quochung-bic/Caffeinate.git
