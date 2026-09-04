@@ -174,6 +174,14 @@ project in Xcode and saving — Xcode will rewrite it and bloat the file.
 - **`MenuBarIconState` quantizes progress to 32 steps** so it works as a cache
   key. Removing the quantization disables the cache.
 
+- **There is no `--no-xcode` here, and that is architectural.** The other repo
+  has one: it builds through SwiftPM so nobody needs Xcode just to run the app.
+  It cannot work here, because every SwiftUI view lives in the `Caffeinate/`
+  application target and `CaffeinateKit` holds no GUI at all — SwiftPM has
+  nothing to link an executable from. Supporting it would mean moving the whole
+  interface into the package, which is a different architecture, not a flag.
+  `build.sh` says exactly that when asked, rather than failing obscurely.
+
 - **`.gitignore` works as a whitelist.** The `/*` line blocks the whole root and
   each entry below re-opens one path. Consequence: add a new top-level directory
   without declaring `!/name/` and `git status` shows NOTHING — the new files sit
